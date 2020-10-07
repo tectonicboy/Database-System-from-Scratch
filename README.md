@@ -1,3 +1,1 @@
-"# DBMS-from-scratch" 
-# DBMS-from-scratch
-"# DMBS-from-scratch" 
+A free-time project that sees me making a custom relational database management system from scratch in C++, whose primary aim is to improve my programming skills. Includes my own custom SQL syntax and an Interpreter for it and a save state subsystem where databases can be saved by generating all vital information about them into a text file encoded in a custom output format I came up, and then previously saved databases can be loaded when the system is started later.
