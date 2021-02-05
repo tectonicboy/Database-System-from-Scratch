@@ -12,6 +12,8 @@ extern cMain** ptr_obj;
 #include <algorithm>
 #include <fstream>
 #include <cmath>
+#include <ctime>
+#include <Windows.h>
 
 using namespace std;
 
@@ -54,7 +56,6 @@ public:
 		}
 	}
 
-
 	//On delete, number_of_entries decrements, but primary_key does not.
 	void Delete(unsigned& key) {
 		bool found = false;
@@ -93,13 +94,13 @@ public:
 			(*ptr_obj)->m_err_output->AppendString("ERROR: The position at which you attempted to modify an element could not be located in this table.");
 			return;
 		}
-
 	}
+
 	//Print elements of a table [SELECT-[* || string_list]-FROM-table_name-WHERE-[condition(s)]].
 	void Print(vector<unsigned>& VC, vector<unsigned>& VR) {
 		size_t spaces = 0, half_spaces = 0;
 		string row_str = "";
-		bool odd = false;
+		bool odd = false, found = true;
 		for (unsigned i = 0; i < VR.size(); ++i) {
 			for (unsigned j = 0; j < VC.size(); ++j) {
 				if (T.size() > VR[i] && T[VR[i]].size() > VC[j]) {
@@ -120,12 +121,14 @@ public:
 					row_str += "|";
 					odd = false;
 				}
-				else { (*ptr_obj)->m_err_output->AppendString("ERROR: Element to print not located."); }
+				else { (*ptr_obj)->m_err_output->AppendString("ERROR: Element to print not located."); found = false; }
 			}
 			(*ptr_obj)->m_main_output->AppendString(row_str);
 			row_str = "";
 		}
+		if (found) { (*ptr_obj)->m_main_output->AppendString(""); }
 	}
+
 	//Show the column names of the table (the core row)
 	void ShowAttributes(void) {
 		string row_str = "";
@@ -175,7 +178,6 @@ public:
 //***************************************************************************************************
 //********************************* MAIN DBMS FUNCTIONS FOLLOW **************************************
 //***************************************************************************************************
-
 
 using namespace std;
 
@@ -281,6 +283,14 @@ void SQL_Command_Interpreter(string& command) {
 		for (size_t i = 0; i < databases.size(); ++i) {
 			(*ptr_obj)->m_main_output->AppendString(databases[i].db_name);
 		}
+		return;
+	}
+	if (cmd[0] == "CLEAR_ERR") {
+		(*ptr_obj)->m_err_output->Clear();
+		return;
+	}
+	if (cmd[0] == "CLEAR_MAIN") {
+		(*ptr_obj)->m_main_output->Clear();
 		return;
 	}
 	if ((!(cmd[0] == "CREATE"))) {
@@ -692,27 +702,51 @@ void SaveSystem(void) {
 	}
 	myfile << "SYS_END\n";
 	myfile.close();
-	(*ptr_obj)->m_err_output->AppendString("System exiting...");
+	myfile.open("CommandHistory.txt", fstream::app);
+	time_t now = time(0);
+	string dt = ctime(&now);
+	myfile << "ON " << dt << "\n";
+	wxArrayString hist = (*ptr_obj)->m_history_txt->GetStrings();
+	for (size_t i = 0; i < hist.size(); ++i) {
+		myfile << hist[i] << "\n";
+	}
+	myfile << "\n\n";
+	myfile.close();
+	(*ptr_obj)->m_err_output->AppendString("System saved.");
 	return;
 }
 
 void LoadSystem(void) {
 	string line, db_name = "", tbl_name = "";
 	int ID_state = 0;
-	bool db_nameb = false, tbl_nameb = false;
+	bool db_nameb = false, tbl_nameb = false, found_db = false;
 	vector<vector<string>> rows = {};
 	vector<string> row_entries = {};
 	vector<Table> tbls = {};
-	int line_counter = 0;
 	(*ptr_obj)->m_err_output->AppendString("System loading...");
 	ifstream myfile1("SavedDatabases.txt");
 	if (myfile1.is_open())
 	{
 		while (getline(myfile1, line))
 		{
-			++line_counter;
+			if((found_db) && (line != "*") && (line != "SYS_END")){continue;}
+			else if (found_db && line == "*") {
+				found_db = false;
+				continue;
+			}
+			else if (found_db && line == "SYS_END") {
+				(*ptr_obj)->m_err_output->AppendString("System loaded successfully.");
+				break;
+			}
 			if (db_nameb) {
 				db_name = line;
+				for (size_t i = 0; i < databases.size(); ++i) {
+					if (db_name == databases[i].db_name) {
+						found_db = true;
+						break;
+					}
+				}
+				if (found_db) {continue;}
 				db_nameb = false;
 			}
 			else if (tbl_nameb) {
@@ -771,6 +805,55 @@ void LoadSystem(void) {
 		}
 		myfile1.close();
 	}
+}
+
+//Open file SERVER_SQL_COMMANDS.txt, execute all commands on it, and clear it.
+bool DB_UPDATE = true;
+
+void UpdateDatabase(string& filename) {
+	bool did_anything = false;
+	fstream sql_file;
+	if (filename == "SERVER_SQL_COMMANDS.txt") {
+		while(DB_UPDATE) {
+			if ((ptr_obj != nullptr) && ((*ptr_obj) != nullptr)) {
+				sql_file.open(filename, fstream::in);
+				if (sql_file.is_open()) {
+					string line = "";
+					while (getline(sql_file, line)) {
+						//UNCOMMENT THESE TO ALLOW DATABASE SYSTEM TO BE SHUT DOWN AND LOEADED FROM THE WEBSITE.
+						/*
+						if (line == "EXIT") {
+							delete (*ptr_obj);
+						}
+						if (line == "LOAD") { LoadSystem(); }
+						*/
+						if (line == "SAVE") { SaveSystem(); did_anything = true; }
+						else if(line.size() > 5){
+							SQL_Command_Interpreter(line);
+							did_anything = true;
+							(*ptr_obj)->m_main_output->AppendString("");
+						}
+					}
+					sql_file.close();
+					if(did_anything){
+						sql_file.open(filename, fstream::out);
+						if (sql_file.is_open()) {
+							sql_file.close();
+						}
+						else {
+							(*ptr_obj)->m_err_output->AppendString("Unable to open sql file for writing.");
+						}
+					}
+				}
+				else {
+					(*ptr_obj)->m_err_output->AppendString("Unable to open sql file for reading.");
+				}
+			}
+			Sleep(10000);
+			did_anything = false;
+		}
+	}
+	return;
 }
 
 //*********************************************************************************************************************
