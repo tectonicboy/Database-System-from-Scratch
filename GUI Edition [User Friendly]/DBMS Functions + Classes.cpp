@@ -1,4 +1,5 @@
 #include "cApp.h"
+#include "DBMS Functions + Classes.h"
 
 extern cMain** ptr_obj;
 
@@ -13,26 +14,20 @@ extern cMain** ptr_obj;
 #include <fstream>
 #include <cmath>
 #include <ctime>
-#include <Windows.h>
+#include <unistd.h>
 
 using namespace std;
 
 static size_t max_len = 16;
 
-class Table {
-public:
-	string table_name = "";
-	vector<vector<string>> T = {};
-	unsigned number_of_entries = 0;
-	unsigned primary_key = 0LL;
 
-	Table(string& s, vector<string>& v) : table_name(s) {
+	Table::Table(string& s, vector<string>& v) : table_name(s) {
 		v.insert(v.begin(), 1, "ID");
 		T.push_back(v);
 	}
 
 	//Insert an entry to the table with provided values [INSERT INTO name VALUES vals]
-	void Insert(vector<string>& v) {
+	void Table::Insert(vector<string>& v) {
 		for (size_t i = 0; i < v.size(); ++i) {
 			if (v[i].size() > max_len) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: An element you tried entering is too long. Max length of an entry: 16");
@@ -57,7 +52,7 @@ public:
 	}
 
 	//On delete, number_of_entries decrements, but primary_key does not.
-	void Delete(unsigned& key) {
+	void Table::Delete(unsigned& key) {
 		bool found = false;
 		string key_str = to_string(key);
 		unsigned position_index = 0;
@@ -80,7 +75,7 @@ public:
 		}
 	}
 
-	void Alter(size_t& row_index, size_t& column_index, string& s) {
+	void Table::Alter(size_t& row_index, size_t& column_index, string& s) {
 		if (T.size() > row_index && T[row_index].size() > column_index && s.size() <= 16) {
 			(*ptr_obj)->m_err_output->AppendString("SUCCESS: Setting T[" + _(to_string(row_index))
 				+ _("][") + _(to_string(column_index)) + _("] to ") + _(s));
@@ -97,7 +92,7 @@ public:
 	}
 
 	//Print elements of a table [SELECT-[* || string_list]-FROM-table_name-WHERE-[condition(s)]].
-	void Print(vector<unsigned>& VC, vector<unsigned>& VR) {
+	void Table::Print(vector<unsigned>& VC, vector<unsigned>& VR) {
 		size_t spaces = 0, half_spaces = 0;
 		string row_str = "";
 		bool odd = false, found = true;
@@ -130,7 +125,7 @@ public:
 	}
 
 	//Show the column names of the table (the core row)
-	void ShowAttributes(void) {
+	void Table::ShowAttributes(void) {
 		string row_str = "";
 		row_str += ("Attributes of table '" + table_name + "': ");
 		for (size_t i = 0; i < T[0].size() - 1; ++i) {
@@ -139,24 +134,22 @@ public:
 		row_str += T[0][T[0].size() - 1];
 		(*ptr_obj)->m_main_output->AppendString(row_str);
 	}
-};
-class Database {
-public:
-	string db_name = "";
-	vector<Table> tables = {};
 
-	int NumberOfTables(void) const {
+
+
+
+	int Database::NumberOfTables(void) const {
 		return (int)tables.size();
 	}
 
-	Database(string& s, vector<Table>& v) : db_name(s), tables(v) {};
-	Database(string& s) : db_name(s) {
+	Database::Database(string& s, vector<Table>& v) : db_name(s), tables(v) {};
+	Database::Database(string& s) : db_name(s) {
 		tables = {};
 	};
 
-	void AddTable(Table& T) { tables.push_back(T); }
+	void Database::AddTable(Table& T) { tables.push_back(T); }
 
-	void RemoveTable(string& s) {
+	void Database::RemoveTable(string& s) {
 		bool found = false;
 		unsigned position = 0;
 		for (unsigned i = 0; i < tables.size(); ++i) {
@@ -174,7 +167,7 @@ public:
 			(*ptr_obj)->m_err_output->AppendString("ERROR: A table with the supplied name could not be located.");
 		}
 	}
-};
+
 //***************************************************************************************************
 //********************************* MAIN DBMS FUNCTIONS FOLLOW **************************************
 //***************************************************************************************************
@@ -274,7 +267,7 @@ vector<string> SeparateCondition(string s) {
 	return output_vec;
 }
 
-void SQL_Command_Interpreter(string& command) {
+bool SQL_Command_Interpreter(string& command) {
 	vector<string> cmd = SeparateAllWords(command);
 	size_t db_pos = 0, tbl_pos = 0, row_pos = 0, col_pos = 0;
 	bool found = false;
@@ -283,15 +276,15 @@ void SQL_Command_Interpreter(string& command) {
 		for (size_t i = 0; i < databases.size(); ++i) {
 			(*ptr_obj)->m_main_output->AppendString(databases[i].db_name);
 		}
-		return;
+		return true;
 	}
 	if (cmd[0] == "CLEAR_ERR") {
 		(*ptr_obj)->m_err_output->Clear();
-		return;
+		return true;
 	}
 	if (cmd[0] == "CLEAR_MAIN") {
 		(*ptr_obj)->m_main_output->Clear();
-		return;
+		return true;
 	}
 	if ((!(cmd[0] == "CREATE"))) {
 		for (size_t i = 0; i < databases.size(); ++i) {
@@ -303,26 +296,26 @@ void SQL_Command_Interpreter(string& command) {
 		}
 		if (!found) {
 			(*ptr_obj)->m_err_output->AppendString("ERROR: A database with the supplied name does not exist.");
-			return;
+			return false;
 		}
 	}
 	//Code for creating a database, BUT NOT for creating a table, goes here.
 	else {
+		if(cmd[1] != "DB"){(*ptr_obj)->m_err_output->AppendString("ERROR: Invalid command to create a database. Syntax: CREATE-DB-dbname-num_tables-tbl1_name-num_cols-col1-col2-tbl2_name-num_cols-..."); return false;}
 		found = false;
 		if (cmd.size() < 4) {
 			(*ptr_obj)->m_err_output->AppendString("ERROR: Command to create a database is too short. Minimum size: 4");
-			return;
+			return false;
 		}
 		string db_name = cmd[2], tbl_name = "";
 		vector<Table> vec_tbls = {};
 		vector<string> columns = {};
 		if (stoi(cmd[3]) > 0) {
-
 			int tbls = stoi(cmd[3]), pos_counter = 4, cols = 0;
 			if (cmd.size() < ((3 * tbls) + 4)) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: Command to create the database is too short. Minimum required size: "
 					+ _(to_string(((3 * tbls) + 4))));
-				return;
+				return false;
 			}
 			for (int i = 0; i < tbls; ++i) {
 				tbl_name = cmd[pos_counter];
@@ -340,13 +333,13 @@ void SQL_Command_Interpreter(string& command) {
 			Database db(db_name, vec_tbls);
 			databases.push_back(db);
 			(*ptr_obj)->m_err_output->AppendString("SUCCESS: Added the database to the system!");
-			return;
+			return true;
 		}
 		else {
 			Database db(db_name);
 			databases.push_back(db);
 			(*ptr_obj)->m_err_output->AppendString("SUCCESS: Added the database to the system!");
-			return;
+			return true;
 		}
 	}
 	//Add a table to an existing database.
@@ -356,7 +349,7 @@ void SQL_Command_Interpreter(string& command) {
 		if (cmd[1] == "ADD") {
 			if (cmd.size() < 5) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: Command to add a table to a database is too short.Minimum size : 5");
-				return;
+				return false;
 			}
 			size_t pos_counter = 2;
 			string tbl_name = cmd[pos_counter];
@@ -365,7 +358,7 @@ void SQL_Command_Interpreter(string& command) {
 			if (cmd.size() != (cols + 4)) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: Command to add the table to the database is of invalid length. Required length: "
 					+ _(to_string(cols + 4)));
-				return;
+				return false;
 			}
 			++pos_counter;
 			vector<string> col_names = {};
@@ -375,20 +368,21 @@ void SQL_Command_Interpreter(string& command) {
 			}
 			Table tbl(tbl_name, col_names);
 			databases[db_pos].AddTable(tbl);
-			return;
+			(*ptr_obj)->m_err_output->AppendString("SUCCESS: Added the table " + _(tbl.table_name) + _(" to database ") + _(databases[db_pos].db_name));
+			return true;
 		}
 		found = false;
 		if (cmd[1] == "SHOW_ALL") {
 			if (databases[db_pos].tables.size() == 0) {
 				(*ptr_obj)->m_main_output->AppendString("The database is empty.");
-				return;
+				return true;
 			}
 			else {
 				(*ptr_obj)->m_main_output->AppendString("Outputting tables names...");
 				for (size_t i = 0; i < databases[db_pos].tables.size(); ++i) {
 					(*ptr_obj)->m_main_output->AppendString(databases[db_pos].tables[i].table_name);
 				}
-				return;
+				return true;
 			}
 		}
 		if (cmd.size() > 2 && cmd[2] == "SHOW_ALL") {
@@ -399,11 +393,11 @@ void SQL_Command_Interpreter(string& command) {
 					for (size_t j = 0; j < databases[db_pos].tables[i].T[0].size(); ++j) {
 						(*ptr_obj)->m_main_output->AppendString(databases[db_pos].tables[i].T[0][j]);
 					}
-					return;
+					return true;
 				}
 			}
 			(*ptr_obj)->m_err_output->AppendString("ERROR: A table could not be located within this database.");
-			return;
+			return false;
 
 
 		}
@@ -415,26 +409,26 @@ void SQL_Command_Interpreter(string& command) {
 					found = true;
 					databases[db_pos].tables.erase(databases[db_pos].tables.begin() + i);
 					(*ptr_obj)->m_err_output->AppendString("SUCCESS: Deleted the table from the database.");
-					return;
+					return true;
 				}
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A table could not be located within this database.");
-				return;
+				return false;
 			}
 		}
 		//DELETE-DB_NAME
 		if (cmd[1] == "DELETE" && cmd.size() < 3) {
 			databases.erase(databases.begin() + db_pos);
 			(*ptr_obj)->m_err_output->AppendString("SUCCESS: Deleted the database from the systen.");
-			return;
+			return true;
 		}
 		found = false;
 		//Insert an entry row into a table of an existing database.
 		if (cmd[1] == "INSERT") {
 			if (cmd.size() < 6) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: Command to insert an entry row into a table is too short. Minimum size: 6");
-				return;
+				return false;
 			}
 			size_t pos_counter = 3;
 			string tbl_name = cmd[pos_counter];
@@ -449,7 +443,7 @@ void SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A table with the supplied name does not exist within this database.");
-				return;
+				return false;
 			}
 
 			pos_counter += 2;
@@ -457,17 +451,23 @@ void SQL_Command_Interpreter(string& command) {
 			if ((cmd.size() - 5) != req_size) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: Command to insert an entry row into a table is of invalid size. Required size: "
 					+ _(to_string((databases[db_pos].tables[tbl_pos].T[0].size() - 1) + 5)));
-				return;
+				return false;
 			}
 			vector<string> input = {};
 			for (int i = 0; i < req_size; ++i) {
 				input.push_back(cmd[pos_counter]);
 				++pos_counter;
 			}
+			(*ptr_obj)->m_err_output->AppendString("SUCCESS: Added an entry to table " + _(databases[db_pos].tables[tbl_pos].table_name) + _(" in database ") + _(databases[db_pos].db_name));
 			databases[db_pos].tables[tbl_pos].Insert(input);
-			return;
+			return true;
 		}
-		if (cmd[1] == "DELETE_ENTRY") {
+		//Second one is intended for systems using the database.
+		if (cmd[1] == "DELETE_ENTRY" || cmd[1] == "CHECK") {
+			int checking = 0;
+			fstream response_file;
+			response_file.open("response.txt", fstream::out);
+			if(cmd[1] == "CHECK"){checking = 1;}
 			found = false;
 			for (size_t i = 0; i < databases[db_pos].tables.size(); ++i) {
 				if (databases[db_pos].tables[i].table_name == cmd[2]) {
@@ -478,7 +478,8 @@ void SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A table with the supplied name does not exist within this database.");
-				return;
+				if(checking){response_file << "no"; response_file.close();}
+				return false;
 			}
 			found = false;
 			for (size_t i = 0; i < databases[db_pos].tables[tbl_pos].T[0].size(); ++i) {
@@ -489,21 +490,28 @@ void SQL_Command_Interpreter(string& command) {
 				}
 			}
 			if (!found) {
-				(*ptr_obj)->m_err_output->AppendString("ERROR: A column with the name " + _(cmd[4]) + _("does not exist within this table."));
-				return;
+				(*ptr_obj)->m_err_output->AppendString("ERROR: A column with the name " + _(cmd[4]) + _(" does not exist within this table."));
+				if(checking){response_file << "no"; response_file.close();}
+				return false;
 			}
 			found = false;
 			for (size_t i = 0; i < databases[db_pos].tables[tbl_pos].T.size(); ++i) {
 				if (databases[db_pos].tables[tbl_pos].T[i][col_pos] == cmd[4]) {
 					found = true;
-					databases[db_pos].tables[tbl_pos].T.erase(databases[db_pos].tables[tbl_pos].T.begin() + i);
-					(*ptr_obj)->m_err_output->AppendString("SUCCESS: Deleted an entry from the table in this database.");
+					if(cmd[1] == "DELETE_ENTRY"){
+						databases[db_pos].tables[tbl_pos].T.erase(databases[db_pos].tables[tbl_pos].T.begin() + i);
+						(*ptr_obj)->m_err_output->AppendString("SUCCESS: Deleted an entry from the table in this database.");
+					}
+					else if(checking){
+						response_file << "yes"; response_file.close();
+					}
 				}
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: An entry with the specified value for this particular attribute does not exist within this table.");
-				return;
-			}
+				if(checking){response_file << "no"; response_file.close();}
+				return false;
+			} else{return true;}
 		}
 		if (cmd[1] == "ALTER") {
 			found = false;
@@ -516,7 +524,7 @@ void SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A table with the supplied name does not exist within this database.");
-				return;
+				return false;
 			}
 			found = false;
 			for (size_t i = 0; i < databases[db_pos].tables[tbl_pos].T[0].size(); ++i) {
@@ -527,8 +535,8 @@ void SQL_Command_Interpreter(string& command) {
 				}
 			}
 			if (!found) {
-				(*ptr_obj)->m_err_output->AppendString("ERROR: A column with the name " + _(cmd[4]) + _("does not exist within this table."));
-				return;
+				(*ptr_obj)->m_err_output->AppendString("ERROR: A column with the name " + _(cmd[4]) + _(" does not exist within this table."));
+				return false;
 			}
 			vector<size_t> row_positions = {};
 			found = false;
@@ -540,7 +548,7 @@ void SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: An entry with the specified value for this particular attribute does not exist within this table.");
-				return;
+				return false;
 			}
 			found = false;
 
@@ -553,7 +561,7 @@ void SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A column with the name " + _(cmd[6]) + _(" does not exist within this table."));
-				return;
+				return false;
 			}
 			if (cmd[7].size() <= 16) {
 				for (size_t i = 0; i < row_positions.size(); ++i) {
@@ -561,11 +569,11 @@ void SQL_Command_Interpreter(string& command) {
 					(*ptr_obj)->m_err_output->AppendString("SUCCESS: Alteration of table " + _(cmd[2])
 						+ _(" within database ") + _(cmd[0]) + _(" has been successful."));
 				}
-				return;
+				return true;
 			}
 			else {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: The data item you tried to alter one of the tables' entries' attribute with is too long. Max length: 16");
-				return;
+				return false;
 			}
 		}
 		if (cmd[1] == "SELECT") {
@@ -580,14 +588,14 @@ void SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A table with the supplied name does not exist within this database.");
-				return;
+				return false;
 			}
 			if (databases[db_pos].tables[tbl_pos].T.size() == 1) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: The table you are trying to select items from is empty.");
-				return;
+				return false;
 			}
 			found = false;
-			vector<size_t> vecPOScol = {}, vecPOSrow = {};
+			vector<unsigned int> vecPOScol = {}, vecPOSrow = {};
 			size_t pos = 4;
 			if (cmd[4] == "*") {
 				for (size_t i = 0; i < databases[db_pos].tables[tbl_pos].T[0].size(); ++i) {
@@ -619,7 +627,9 @@ void SQL_Command_Interpreter(string& command) {
 				conds.push_back(SeparateCondition(cmd[i]));
 			}
 			vector<size_t> invalid_conds = {};
+			bool invalid = false;
 			for (size_t i = 0; i < conds.size(); ++i) {
+				invalid = false;
 				for (size_t j = 0; j < databases[db_pos].tables[tbl_pos].T[0].size(); ++j) {
 					if (databases[db_pos].tables[tbl_pos].T[0][j] == conds[i][0]) {
 						pos = j;
@@ -628,10 +638,12 @@ void SQL_Command_Interpreter(string& command) {
 					}
 					if (j == databases[db_pos].tables[tbl_pos].T[0].size() - 1) {
 						(*ptr_obj)->m_err_output->AppendString("ERROR: A column with the name " + _(conds[i][0]) + _(" does not exist within this table."));
+						invalid_conds.push_back(i); 
+						invalid = true; 
 						break;
 					}
 				}
-				if (conds[i][1] == ">" || conds[i][1] == "<") {
+				if ((conds[i][1] == ">" || conds[i][1] == "<") && (!invalid)) {
 					if (!(ContainsOnlyDigits(databases[db_pos].tables[tbl_pos].T[1][pos]))) {
 						(*ptr_obj)->m_err_output->AppendString("ERROR: Cannot use comparison operators on non-numeric items. Invalid condition: "
 							+ _(conds[i][0]) + _(" ") + _(conds[i][1]) + _(" ") + _(conds[i][2]));
@@ -672,12 +684,14 @@ void SQL_Command_Interpreter(string& command) {
 			cond_row_pos = {};
 			conds = {};
 			dummy_vec = {};
+			return true;
 		}
 	}
+	return true;
 }
 
-void SaveSystem(void) {
-	(*ptr_obj)->m_err_output->AppendString("System saving...");
+void SaveSystem(bool out_msg) {
+	if ((out_msg) && (ptr_obj) && (*ptr_obj)) {(*ptr_obj)->m_err_output->AppendString("System saving...");}
 	ofstream myfile;
 	myfile.open("SavedDatabases.txt");
 	for (size_t i = 0; i < databases.size(); ++i) {
@@ -706,24 +720,26 @@ void SaveSystem(void) {
 	time_t now = time(0);
 	string dt = ctime(&now);
 	myfile << "ON " << dt << "\n";
-	wxArrayString hist = (*ptr_obj)->m_history_txt->GetStrings();
-	for (size_t i = 0; i < hist.size(); ++i) {
-		myfile << hist[i] << "\n";
+	if ((ptr_obj) && (*ptr_obj)) {
+		wxArrayString hist = (*ptr_obj)->m_history_txt->GetStrings();
+		for (size_t i = 0; i < hist.size(); ++i) {
+			myfile << hist[i] << "\n";
+		}
 	}
 	myfile << "\n\n";
 	myfile.close();
-	(*ptr_obj)->m_err_output->AppendString("System saved.");
+	if ((out_msg) && (ptr_obj) && (*ptr_obj)) {(*ptr_obj)->m_err_output->AppendString("System saved.");}
 	return;
 }
 
-void LoadSystem(void) {
+void LoadSystem(bool out_msg) {
 	string line, db_name = "", tbl_name = "";
 	int ID_state = 0;
 	bool db_nameb = false, tbl_nameb = false, found_db = false;
 	vector<vector<string>> rows = {};
 	vector<string> row_entries = {};
 	vector<Table> tbls = {};
-	(*ptr_obj)->m_err_output->AppendString("System loading...");
+	if ((out_msg) && (ptr_obj) && (*ptr_obj)) {(*ptr_obj)->m_err_output->AppendString("System loading...");}
 	ifstream myfile1("SavedDatabases.txt");
 	if (myfile1.is_open())
 	{
@@ -735,7 +751,7 @@ void LoadSystem(void) {
 				continue;
 			}
 			else if (found_db && line == "SYS_END") {
-				(*ptr_obj)->m_err_output->AppendString("System loaded successfully.");
+				if ((out_msg) && (ptr_obj) && (*ptr_obj)) {(*ptr_obj)->m_err_output->AppendString("System loaded successfully.");}
 				break;
 			}
 			if (db_nameb) {
@@ -768,7 +784,7 @@ void LoadSystem(void) {
 						tbl.primary_key = 0;
 					}
 					else {
-						tbl.primary_key = stoull(tbl.T[tbl.T.size() - 1][0]);
+						tbl.primary_key = stoull(tbl.T[tbl.T.size() - 1][0]) + 1;
 					}
 					tbls.push_back(tbl);
 					rows = {};
@@ -786,7 +802,7 @@ void LoadSystem(void) {
 					tbl.primary_key = 0;
 				}
 				else {
-					tbl.primary_key = stoull(tbl.T[tbl.T.size() - 1][0]);
+					tbl.primary_key = stoull(tbl.T[tbl.T.size() - 1][0]) + 1;
 				}
 				tbls.push_back(tbl);
 				rows = {};
@@ -796,7 +812,7 @@ void LoadSystem(void) {
 			}
 			//The end of reading.
 			else if (line == "SYS_END") {
-				(*ptr_obj)->m_err_output->AppendString("System loaded successfully.");
+				if ((out_msg) && (ptr_obj) && (*ptr_obj)) {(*ptr_obj)->m_err_output->AppendString("System loaded successfully.");}
 				break;
 			}
 			else {
@@ -811,25 +827,29 @@ void LoadSystem(void) {
 bool DB_UPDATE = true;
 
 void UpdateDatabase(string& filename) {
-	bool did_anything = false;
+	LoadSystem(false);
+	bool did_anything = false, cmd_result;
+    	unsigned int time_second = 1000000;
 	fstream sql_file;
 	if (filename == "SERVER_SQL_COMMANDS.txt") {
 		while(DB_UPDATE) {
-			if ((ptr_obj != nullptr) && ((*ptr_obj) != nullptr)) {
+			if ((ptr_obj) && (*ptr_obj)) {
 				sql_file.open(filename, fstream::in);
 				if (sql_file.is_open()) {
 					string line = "";
 					while (getline(sql_file, line)) {
-						//UNCOMMENT THESE TO ALLOW DATABASE SYSTEM TO BE SHUT DOWN AND LOEADED FROM THE WEBSITE.
+						//(*ptr_obj)->m_err_output->AppendString("Read the following SQL command delivered by the server: " + _(line));
+
+						//UNCOMMENT THESE TO ALLOW DATABASE SYSTEM TO BE SHUT DOWN AND LOEADED/SAVED FROM THE WEBSITE.
 						/*
 						if (line == "EXIT") {
 							delete (*ptr_obj);
 						}
-						if (line == "LOAD") { LoadSystem(); }
 						*/
-						if (line == "SAVE") { SaveSystem(); did_anything = true; }
-						else if(line.size() > 5){
-							SQL_Command_Interpreter(line);
+						if (line == "LOAD") { LoadSystem(); did_anything = true; cmd_result = true;}
+						if (line == "SAVE") { SaveSystem(); did_anything = true; cmd_result = true;}
+						if(line.size() > 5){
+							cmd_result = SQL_Command_Interpreter(line);
 							did_anything = true;
 							(*ptr_obj)->m_main_output->AppendString("");
 						}
@@ -838,6 +858,7 @@ void UpdateDatabase(string& filename) {
 					if(did_anything){
 						sql_file.open(filename, fstream::out);
 						if (sql_file.is_open()) {
+							sql_file << cmd_result << "\n";
 							sql_file.close();
 						}
 						else {
@@ -849,7 +870,7 @@ void UpdateDatabase(string& filename) {
 					(*ptr_obj)->m_err_output->AppendString("Unable to open sql file for reading.");
 				}
 			}
-			Sleep(10000);
+            		usleep(2 * time_second);//sleeps for 2 second
 			did_anything = false;
 		}
 	}
