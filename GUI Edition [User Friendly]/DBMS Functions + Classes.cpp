@@ -866,7 +866,7 @@ void UpdateDatabase(string& filename) {
 					(*ptr_obj)->m_err_output->AppendString("Unable to open sql file for reading.");
 				}
 			}
-            		usleep(0.1 * time_second);//sleeps for 2 second
+            		usleep(0.1 * time_second);//sleeps for a tenth of a second
 			did_anything = false;
 		}
 	}
