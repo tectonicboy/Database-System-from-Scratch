@@ -855,22 +855,18 @@ void UpdateDatabase(string& filename) {
 						}
 					}
 					sql_file.close();
+					//Erase the entered command by opening the file for output.
 					if(did_anything){
 						sql_file.open(filename, fstream::out);
-						if (sql_file.is_open()) {
-							sql_file << cmd_result << "\n";
-							sql_file.close();
-						}
-						else {
-							(*ptr_obj)->m_err_output->AppendString("Unable to open sql file for writing.");
-						}
+						sql_file.close();
+						did_anything = false;
 					}
 				}
 				else {
 					(*ptr_obj)->m_err_output->AppendString("Unable to open sql file for reading.");
 				}
 			}
-            		usleep(2 * time_second);//sleeps for 2 second
+            		usleep(0.1 * time_second);//sleeps for 2 second
 			did_anything = false;
 		}
 	}
