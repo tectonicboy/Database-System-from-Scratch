@@ -15,6 +15,10 @@ extern cMain** ptr_obj;
 #include <cmath>
 #include <ctime>
 #include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 using namespace std;
 
@@ -193,15 +197,10 @@ vector<string> SeparateAllWords(string s) {
 }
 
 bool ContainsOnlyDigits(string s) {
-	bool b = true;
 	for (size_t i = 0; i < s.size(); ++i) {
-		if ((s[i] != '0') && (s[i] != '1') && (s[i] != '2') && (s[i] != '3') && (s[i] != '4') && (s[i] != '5')
-			&& (s[i] != '6') && (s[i] != '7') && (s[i] != '8') && (s[i] != '9'))
-		{
-			b = false;
-		}
+		if(!(s[i] > 47 && s[i] < 58)){return false;}
 	}
-	return b;
+	return true;
 }
 
 bool CheckCondition(string operand1, string Operator, string operand2) {
@@ -828,47 +827,35 @@ bool DB_UPDATE = true;
 
 void UpdateDatabase(string& filename) {
 	LoadSystem(false);
-	bool did_anything = false, cmd_result;
-    	unsigned int time_second = 1000000;
-	fstream sql_file;
-	if (filename == "SERVER_SQL_COMMANDS.txt") {
-		while(DB_UPDATE) {
-			if ((ptr_obj) && (*ptr_obj)) {
-				sql_file.open(filename, fstream::in);
-				if (sql_file.is_open()) {
-					string line = "";
-					while (getline(sql_file, line)) {
-						//(*ptr_obj)->m_err_output->AppendString("Read the following SQL command delivered by the server: " + _(line));
 
-						//UNCOMMENT THESE TO ALLOW DATABASE SYSTEM TO BE SHUT DOWN AND LOEADED/SAVED FROM THE WEBSITE.
-						/*
-						if (line == "EXIT") {
-							delete (*ptr_obj);
-						}
-						*/
-						if (line == "LOAD") { LoadSystem(); did_anything = true; cmd_result = true;}
-						if (line == "SAVE") { SaveSystem(); did_anything = true; cmd_result = true;}
-						if(line.size() > 5){
-							cmd_result = SQL_Command_Interpreter(line);
-							did_anything = true;
-							(*ptr_obj)->m_main_output->AppendString("");
-						}
-					}
-					sql_file.close();
-					//Erase the entered command by opening the file for output.
-					if(did_anything){
-						sql_file.open(filename, fstream::out);
-						sql_file.close();
-						did_anything = false;
-					}
-				}
-				else {
-					(*ptr_obj)->m_err_output->AppendString("Unable to open sql file for reading.");
-				}
-			}
-            		usleep(0.1 * time_second);//sleeps for a tenth of a second
-			did_anything = false;
+	char buf[128];
+	int fd, cl, rc;
+	char* socket_path = "\0hidden", *response_buf = "Received web server's SQL request!\n\0";
+	struct sockaddr_un addr;
+	fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	*addr.sun_path = '\0';
+	strncpy(addr.sun_path+1, socket_path+1, sizeof(addr.sun_path)-2);
+	bind(fd, (struct sockaddr*)&addr, sizeof(addr));
+	listen(fd, 5);
+	std::string req = "";
+	while(1){
+		memset(buf, 0x0, sizeof(buf));
+		req = "";
+		cl = accept(fd, NULL, NULL);
+		if((rc = read(cl, buf, sizeof(buf))) > 0){
+			printf("The web server sent me this: %s\n", buf);
+			for(size_t i = 0; buf[i] != '\0'; ++i){
+				printf("Reading the following char: %c\n", buf[i]);
+				req.push_back(buf[i]);
+			} 
+			printf("Exited the FOR loop, about to call SQL Command Interpreter\n");
+			SQL_Command_Interpreter(req);
 		}
+		write(cl, response_buf, strlen(response_buf));
+		if(rc == -1){ perror("read error\n"); exit(-1);printf("GOT HERE!\n");}
+		else if(rc == 0){printf("EOF\n");close(cl);}
 	}
 	return;
 }
