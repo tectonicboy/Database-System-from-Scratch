@@ -854,7 +854,7 @@ void UpdateDatabase(string& filename) {
 			SQL_Command_Interpreter(req);
 		}
 		write(cl, response_buf, strlen(response_buf));
-		if(rc == -1){ perror("read error\n"); exit(-1);printf("GOT HERE!\n");}
+		if(rc == -1){ perror("read error\n"); exit(-1);}
 		else if(rc == 0){printf("EOF\n");close(cl);}
 	}
 	return;
