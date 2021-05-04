@@ -2,6 +2,7 @@
 #include "DBMS Functions + Classes.h"
 
 extern cMain** ptr_obj;
+std::string SQL_Response = "";
 
 //***************************************************************************************************
 //********************************** MAIN DBMS CLASSES FOLLOW ***************************************
@@ -14,6 +15,7 @@ extern cMain** ptr_obj;
 #include <fstream>
 #include <cmath>
 #include <ctime>
+#include <cstring>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -464,8 +466,6 @@ bool SQL_Command_Interpreter(string& command) {
 		//Second one is intended for systems using the database.
 		if (cmd[1] == "DELETE_ENTRY" || cmd[1] == "CHECK") {
 			int checking = 0;
-			fstream response_file;
-			response_file.open("response.txt", fstream::out);
 			if(cmd[1] == "CHECK"){checking = 1;}
 			found = false;
 			for (size_t i = 0; i < databases[db_pos].tables.size(); ++i) {
@@ -477,7 +477,7 @@ bool SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A table with the supplied name does not exist within this database.");
-				if(checking){response_file << "no"; response_file.close();}
+				if(checking){SQL_Response = "no";}
 				return false;
 			}
 			found = false;
@@ -490,7 +490,7 @@ bool SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A column with the name " + _(cmd[4]) + _(" does not exist within this table."));
-				if(checking){response_file << "no"; response_file.close();}
+				if(checking){SQL_Response = "no";}
 				return false;
 			}
 			found = false;
@@ -502,13 +502,20 @@ bool SQL_Command_Interpreter(string& command) {
 						(*ptr_obj)->m_err_output->AppendString("SUCCESS: Deleted an entry from the table in this database.");
 					}
 					else if(checking){
-						response_file << "yes"; response_file.close();
+						SQL_Response = "yes";
+						for(size_t j = 5; j < cmd.size(); ++j){
+							for(size_t k = 0; k < databases[db_pos].tables[tbl_pos].T[0].size(); ++k){
+								if(databases[db_pos].tables[tbl_pos].T[0][k] == cmd[j]){
+									SQL_Response += ("-" + databases[db_pos].tables[tbl_pos].T[i][k]);
+								}
+							}
+						}
 					}
 				}
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: An entry with the specified value for this particular attribute does not exist within this table.");
-				if(checking){response_file << "no"; response_file.close();}
+				if(checking){SQL_Response = "no";}
 				return false;
 			} else{return true;}
 		}
@@ -822,15 +829,14 @@ void LoadSystem(bool out_msg) {
 	}
 }
 
-//Open file SERVER_SQL_COMMANDS.txt, execute all commands on it, and clear it.
-bool DB_UPDATE = true;
 
 void UpdateDatabase(string& filename) {
 	LoadSystem(false);
 
 	char buf[128];
 	int fd, cl, rc;
-	char* socket_path = "\0hidden", *response_buf = "Received web server's SQL request!\n\0";
+	size_t sql_response_siz;
+	char* socket_path = "\0hidden";
 	struct sockaddr_un addr;
 	fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	memset(&addr, 0, sizeof(addr));
@@ -843,17 +849,18 @@ void UpdateDatabase(string& filename) {
 	while(1){
 		memset(buf, 0x0, sizeof(buf));
 		req = "";
+		SQL_Response = "";
 		cl = accept(fd, NULL, NULL);
 		if((rc = read(cl, buf, sizeof(buf))) > 0){
 			printf("The web server sent me this: %s\n", buf);
-			for(size_t i = 0; buf[i] != '\0'; ++i){
-				printf("Reading the following char: %c\n", buf[i]);
-				req.push_back(buf[i]);
-			} 
-			printf("Exited the FOR loop, about to call SQL Command Interpreter\n");
+			for(size_t i = 0; buf[i] != '\0'; ++i){req.push_back(buf[i]);} 
 			SQL_Command_Interpreter(req);
+			memset(buf, 0x0, sizeof(buf));
+			sql_response_siz = SQL_Response.length();
+			for(size_t i = 0; i < sql_response_siz; ++i){buf[i] = SQL_Response[i];}
 		}
-		write(cl, response_buf, strlen(response_buf));
+		printf("About to send the following sql response to the web server: %s\n", buf);
+		write(cl, buf, strlen(buf));
 		if(rc == -1){ perror("read error\n"); exit(-1);}
 		else if(rc == 0){printf("EOF\n");close(cl);}
 	}
