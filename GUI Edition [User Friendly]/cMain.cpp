@@ -1,6 +1,5 @@
-#include "DBMS Functions + Classes.cpp"
+#include "DBMS Functions + Classes.h"
 #include "cMain.h"
-#include <Windows.h>
 #include <thread>
 
 cMain** ptr_obj;
@@ -11,41 +10,41 @@ extern bool DB_UPDATE;
 #define DISP_Y wxGetDisplaySize().y
 
 wxBEGIN_EVENT_TABLE(cMain, wxFrame)
-	EVT_BUTTON(10001, OnButtonClicked)
+	EVT_BUTTON(10001, cMain::OnButtonClicked)
 
-	EVT_BUTTON(10002, OnAboutBtnClicked)
-	EVT_BUTTON(10003, OnSQLBtnClicked)
-	EVT_BUTTON(10004, OnSchemaBtnClicked)
-	EVT_BUTTON(10005, OnHistoryBtnClicked)
-	EVT_BUTTON(10006, OnHelpBtnClicked)
-	EVT_BUTTON(10007, OnContactBtnClicked)
-	EVT_BUTTON(10008, OnLegalBtnClicked)
+	EVT_BUTTON(10002, cMain::OnAboutBtnClicked)
+	EVT_BUTTON(10003, cMain::OnSQLBtnClicked)
+	EVT_BUTTON(10004, cMain::OnSchemaBtnClicked)
+	EVT_BUTTON(10005, cMain::OnHistoryBtnClicked)
+	EVT_BUTTON(10006, cMain::OnHelpBtnClicked)
+	EVT_BUTTON(10007, cMain::OnContactBtnClicked)
+	EVT_BUTTON(10008, cMain::OnLegalBtnClicked)
 
-	EVT_BUTTON(10010, OnSchBtnGOClicked)
+	EVT_BUTTON(10010, cMain::OnSchBtnGOClicked)
 wxEND_EVENT_TABLE()
 
 using namespace std;
 
 //*********** COLOR DEFINITIONS **********
 wxColour
-hot_pink({ 245, 2, 87 }),
-magenta({ 143, 82, 209 }),
-light_lime({ 106, 250, 92 }),
-golden({ 252, 255, 87 }),
-dark_purple({ 46, 0, 37 }),
-light_green({ 220, 255, 204 }),
-blue({ 0, 200, 255 }),
-green_gray({ 89, 99, 89 }),
-pale_red({ 173, 111, 111 }),
-pale_green({ 86, 163, 89 }),
-solid_green({ 107, 209, 110 }),
-grim_purple({ 189, 2, 123 }),
-solid_blue({ 46, 15, 186 }),
-dark_blue({ 0, 2, 64}),
-bright_blue({ 25, 224, 218 }),
-lightdark_purple({ 122, 0, 100 }),
-grim_green({ 6, 43, 31 }),
-black_purple({ 43, 6, 41 });
+hot_pink( 245, 2, 87 ),
+magenta( 143, 82, 209 ),
+light_lime( 106, 250, 92 ),
+golden( 252, 255, 87 ),
+dark_purple( 46, 0, 37 ),
+light_green( 220, 255, 204 ),
+blue( 0, 200, 255 ),
+green_gray( 89, 99, 89 ),
+pale_red( 173, 111, 111 ),
+pale_green( 86, 163, 89 ),
+solid_green( 107, 209, 110 ),
+grim_purple( 189, 2, 123 ),
+solid_blue( 46, 15, 186 ),
+dark_blue(0, 2, 64),
+bright_blue( 25, 224, 218 ),
+lightdark_purple( 122, 0, 100 ),
+grim_green( 6, 43, 31 ),
+black_purple( 43, 6, 41 );
 //****************************************
 
 
@@ -167,7 +166,7 @@ cMain::cMain() : wxFrame(nullptr, wxID_ANY, "Custom Database Management System",
 		"- phone number: +447507275797", ""
 	};
 	for (size_t i = 0; i < txt_strings.size(); ++i) {
-		m_contact_txt->AppendString(txt_strings[i]); 
+		m_contact_txt->AppendString(txt_strings[i]);
 	}
 
 	//************************************** CONTACT SECTION END **********************************************************************
@@ -233,13 +232,14 @@ void cMain::OnButtonClicked(wxCommandEvent& evt) {
 	string real_input = input.ToStdString();
 	m_history_txt->AppendString(real_input);
 	m_txt1->Clear();
-	if (real_input == "") { 
+	if (real_input == "") {
 		evt.Skip();
-		return; 
+		return;
 	}
 	if (real_input == "EXIT") {
-		DB_UPDATE = false;
-		t1.join();
+		//DB_UPDATE = false;
+		//~t1;
+		//t1.join();
 		delete this;
 	}
 	else if (real_input == "LOAD") {LoadSystem();}
