@@ -855,7 +855,7 @@ void UpdateDatabase(string& filename) {
 			printf("The web server sent me this: %s\n", buf);
 			for(size_t i = 0; buf[i] != '\0'; ++i){req.push_back(buf[i]);} 
 			SQL_Command_Interpreter(req);
-			memset(buf, 0x0, sizeof(buf));
+			memset(buf, 0x0, 128);
 			sql_response_siz = SQL_Response.length();
 			for(size_t i = 0; i < sql_response_siz; ++i){buf[i] = SQL_Response[i];}
 		}
