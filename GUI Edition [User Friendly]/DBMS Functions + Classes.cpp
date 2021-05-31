@@ -846,12 +846,10 @@ void UpdateDatabase(string& filename) {
 						req.push_back(buf[i]);
 						++i;	
 					}
-					cout << "About to call the interpreter on:" << req << "\n";
 					SQL_Command_Interpreter(req);
 					req = "";
 					SQL_Response += ";";
 				}
-
 			}
 			memset(buf, 0x0, 128);
 			sql_response_siz = SQL_Response.length();
