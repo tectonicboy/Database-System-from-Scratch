@@ -15,6 +15,7 @@ std::string SQL_Response = "";
 #include <fstream>
 #include <cmath>
 #include <ctime>
+#include <errno.h>
 #include <cstring>
 #include <unistd.h>
 #include <stdlib.h>
@@ -477,7 +478,7 @@ bool SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A table with the supplied name does not exist within this database.");
-				if(checking){SQL_Response = "no";}
+				if(checking){SQL_Response += "no";}
 				return false;
 			}
 			found = false;
@@ -490,7 +491,7 @@ bool SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: A column with the name " + _(cmd[4]) + _(" does not exist within this table."));
-				if(checking){SQL_Response = "no";}
+				if(checking){SQL_Response += "no";}
 				return false;
 			}
 			found = false;
@@ -502,7 +503,7 @@ bool SQL_Command_Interpreter(string& command) {
 						(*ptr_obj)->m_err_output->AppendString("SUCCESS: Deleted an entry from the table in this database.");
 					}
 					else if(checking){
-						SQL_Response = "yes";
+						SQL_Response += "yes";
 						for(size_t j = 5; j < cmd.size(); ++j){
 							for(size_t k = 0; k < databases[db_pos].tables[tbl_pos].T[0].size(); ++k){
 								if(databases[db_pos].tables[tbl_pos].T[0][k] == cmd[j]){
@@ -515,7 +516,7 @@ bool SQL_Command_Interpreter(string& command) {
 			}
 			if (!found) {
 				(*ptr_obj)->m_err_output->AppendString("ERROR: An entry with the specified value for this particular attribute does not exist within this table.");
-				if(checking){SQL_Response = "no";}
+				if(checking){SQL_Response += "no";}
 				return false;
 			} else{return true;}
 		}
@@ -775,23 +776,15 @@ void LoadSystem(bool out_msg) {
 				tbl_nameb = false;
 				tbl_name = line;
 			}
-			else if (line == "*") {
-				db_nameb = true;
-			}
+			else if (line == "*") {db_nameb = true;}
 			else if (line == "#") {
 				if (!rows.size() == 0) {
 					Table tbl(tbl_name, rows[0]);
 					tbl.T[0].erase(tbl.T[0].begin());
-					for (size_t i = 1; i < rows.size(); ++i) {
-						tbl.T.push_back(rows[i]);
-					}
+					for (size_t i = 1; i < rows.size(); ++i) {tbl.T.push_back(rows[i]);}
 					tbl.number_of_entries = tbl.T.size();
-					if (tbl.T.size() == 1) {
-						tbl.primary_key = 0;
-					}
-					else {
-						tbl.primary_key = stoull(tbl.T[tbl.T.size() - 1][0]) + 1;
-					}
+					if (tbl.T.size() == 1) {tbl.primary_key = 0;}
+					else {tbl.primary_key = stoull(tbl.T[tbl.T.size() - 1][0]) + 1;}
 					tbls.push_back(tbl);
 					rows = {};
 				}
@@ -800,46 +793,35 @@ void LoadSystem(bool out_msg) {
 			else if (line == "TBL_END") {
 				Table tbl(tbl_name, rows[0]);
 				tbl.T[0].erase(tbl.T[0].begin());
-				for (size_t i = 1; i < rows.size(); ++i) {
-					tbl.T.push_back(rows[i]);
-				}
+				for (size_t i = 1; i < rows.size(); ++i){tbl.T.push_back(rows[i]);}
 				tbl.number_of_entries = tbl.T.size();
-				if (tbl.T.size() == 1) {
-					tbl.primary_key = 0;
-				}
-				else {
-					tbl.primary_key = stoull(tbl.T[tbl.T.size() - 1][0]) + 1;
-				}
+				if (tbl.T.size() == 1) {tbl.primary_key = 0;}
+				else {tbl.primary_key = stoull(tbl.T[tbl.T.size() - 1][0]) + 1;}
 				tbls.push_back(tbl);
 				rows = {};
 				Database in_db(db_name, tbls);
 				databases.push_back(in_db);
 				tbls = {};
 			}
-			//The end of reading.
 			else if (line == "SYS_END") {
 				if ((out_msg) && (ptr_obj) && (*ptr_obj)) {(*ptr_obj)->m_err_output->AppendString("System loaded successfully.");}
 				break;
 			}
-			else {
-				rows.push_back(SeparateAllWords(line));
-			}
+			else {rows.push_back(SeparateAllWords(line));}
 		}
 		myfile1.close();
 	}
 }
 
-
 void UpdateDatabase(string& filename) {
 	LoadSystem(false);
-
 	char buf[128];
 	int fd, cl, rc;
 	size_t sql_response_siz;
 	char* socket_path = "\0hidden";
 	struct sockaddr_un addr;
 	fd = socket(AF_UNIX, SOCK_STREAM, 0);
-	memset(&addr, 0, sizeof(addr));
+	memset(&addr, 0x0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	*addr.sun_path = '\0';
 	strncpy(addr.sun_path+1, socket_path+1, sizeof(addr.sun_path)-2);
@@ -850,18 +832,35 @@ void UpdateDatabase(string& filename) {
 		memset(buf, 0x0, sizeof(buf));
 		req = "";
 		SQL_Response = "";
+		printf("Listening for web server requests...\n");
 		cl = accept(fd, NULL, NULL);
 		if((rc = read(cl, buf, sizeof(buf))) > 0){
 			printf("The web server sent me this: %s\n", buf);
-			for(size_t i = 0; buf[i] != '\0'; ++i){req.push_back(buf[i]);} 
-			SQL_Command_Interpreter(req);
+			if(buf[0] == '1'){
+				for(size_t i = 2; buf[i] != '\0'; ++i){req.push_back(buf[i]);}
+				SQL_Command_Interpreter(req);
+			}
+			else{
+				for(size_t i = 2; buf[i] != '\0'; ++i){
+					for(size_t j = i; buf[j] != ';'; ++j){
+						req.push_back(buf[i]);
+						++i;	
+					}
+					cout << "About to call the interpreter on:" << req << "\n";
+					SQL_Command_Interpreter(req);
+					req = "";
+					SQL_Response += ";";
+				}
+
+			}
 			memset(buf, 0x0, 128);
 			sql_response_siz = SQL_Response.length();
 			for(size_t i = 0; i < sql_response_siz; ++i){buf[i] = SQL_Response[i];}
 		}
 		printf("About to send the following sql response to the web server: %s\n", buf);
 		write(cl, buf, strlen(buf));
-		if(rc == -1){ perror("read error\n"); exit(-1);}
+		SQL_Response = "";
+		if(rc == -1){ printf("ERROR: read() errno=%d\n", errno);}
 		else if(rc == 0){printf("EOF\n");close(cl);}
 	}
 	return;
