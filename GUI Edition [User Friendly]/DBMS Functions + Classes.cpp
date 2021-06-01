@@ -815,7 +815,7 @@ void LoadSystem(bool out_msg) {
 
 void UpdateDatabase(string& filename) {
 	LoadSystem(false);
-	char buf[128];
+	char buf[1024];
 	int fd, cl, rc;
 	size_t sql_response_siz;
 	char* socket_path = "\0hidden";
@@ -829,12 +829,12 @@ void UpdateDatabase(string& filename) {
 	listen(fd, 5);
 	std::string req = "";
 	while(1){
-		memset(buf, 0x0, sizeof(buf));
+		memset(buf, 0x0, 1024);
 		req = "";
 		SQL_Response = "";
 		printf("Listening for web server requests...\n");
 		cl = accept(fd, NULL, NULL);
-		if((rc = read(cl, buf, sizeof(buf))) > 0){
+		if((rc = read(cl, buf, 1024)) > 0){
 			printf("The web server sent me this: %s\n", buf);
 			if(buf[0] == '1'){
 				for(size_t i = 2; buf[i] != '\0'; ++i){req.push_back(buf[i]);}
@@ -846,12 +846,14 @@ void UpdateDatabase(string& filename) {
 						req.push_back(buf[i]);
 						++i;	
 					}
+					cout << "About to call the interpreter on:" << req << "\n";
 					SQL_Command_Interpreter(req);
 					req = "";
 					SQL_Response += ";";
 				}
+
 			}
-			memset(buf, 0x0, 128);
+			memset(buf, 0x0, 1024);
 			sql_response_siz = SQL_Response.length();
 			for(size_t i = 0; i < sql_response_siz; ++i){buf[i] = SQL_Response[i];}
 		}
