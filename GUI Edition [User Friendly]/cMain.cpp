@@ -1,9 +1,8 @@
-#include "DBMS Functions + Classes.h"
+#include "DBMS-Functions-Classes.h"
 #include "cMain.h"
 #include <thread>
 
 cMain** ptr_obj;
-extern bool DB_UPDATE;
 
 #define DISP_SIZE wxGetDisplaySize()
 #define DISP_X wxGetDisplaySize().x
@@ -262,8 +261,8 @@ void cMain::OnSchBtnGOClicked(wxCommandEvent& evt) {
 		else {
 			m_history_txt->AppendString(command);
 			if (command == "EXIT") {
-				DB_UPDATE = false;
-				t1.join();
+				//DB_UPDATE = false;
+				//t1.join();
 				delete (*ptr_obj);
 			}
 			else if (command == "LOAD") { LoadSystem(); }
