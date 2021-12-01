@@ -1,6 +1,6 @@
 # -*- MakeFile -*-
 
-sysdb:	cMain.o cApp.o DBMS-Functions-Classes.o
+sysdb: cMain.o cApp.o DBMS-Functions-Classes.o
 	g++ -pipe cMain.o cApp.o DBMS-Functions-Classes.o `wx-config --libs` -o sysdb
 
 cMain.o: cMain.cpp
