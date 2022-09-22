@@ -103,7 +103,12 @@ static void Add_Row(size_t db_index, size_t tbl_index, char* contents_address){
         uint32_t next_free = THIS_TABLE->next_free_row;
 	char* ptr = (char*)&next_free;
 	for(size_t i = 0; i < sizeof(uint32_t); ++i){
-		if((*(ptr + i)) || ( (!(*(ptr + i))) && (i == 0) ) ) { (*(ptr + i)) += 48; }
+		if(
+		   (*(ptr + i)) 
+		   || 
+		   ( (!(*(ptr + i))) && (i == 0) )
+		  ) 
+		{ (*(ptr + i)) += 48; }
 		memcpy((void*)(contents_address + i), (void*)(ptr + i), sizeof(char));
 	}
 
