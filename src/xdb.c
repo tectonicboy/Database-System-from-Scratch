@@ -177,7 +177,7 @@ static void Print_Table(size_t db_index, size_t tbl_index){
 		printf("|\n");
 	}
 	print_red();
-	printf("\n\n********************** END OF TABLE *********************************\n\n");
+	printf("\n\n******************************** END OF TABLE *********************************\n\n");
 	print_reset();
 }	
 
