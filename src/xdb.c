@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -43,7 +44,7 @@ struct __attribute__ ((__packed__)) table {
 	char tbl_name[64];
 	size_t active_entries;
 	size_t columns;
-	size_t next_free_row;
+	uint32_t next_free_row;
 	char* table_ptr; /* memory address of the actual table */
 	unsigned char table_full;
 };
@@ -82,8 +83,8 @@ static void Create_Table(unsigned char table_full, size_t next_free_row, size_t 
 		dbs[db_index]->tables[dbs[db_index]->active_tables]->tbl_name,
 	       	tbl_name
 	      );
-        dbs[db_index]->tables[dbs[db_index]->active_tables]->table_ptr = malloc(INITIAL_ROWS * cols * ROW_ENTRY_SIZ);
-	dbs[db_index]->tables[dbs[db_index]->active_tables]->columns = cols;
+        dbs[db_index]->tables[dbs[db_index]->active_tables]->table_ptr = malloc(INITIAL_ROWS * (cols + 1) * ROW_ENTRY_SIZ);
+	dbs[db_index]->tables[dbs[db_index]->active_tables]->columns = cols + 1;
 	dbs[db_index]->tables[dbs[db_index]->active_tables]->next_free_row = next_free_row;
 	dbs[db_index]->tables[dbs[db_index]->active_tables]->table_full = table_full;
 	++dbs[db_index]->active_tables;
@@ -95,9 +96,16 @@ static void Create_Table(unsigned char table_full, size_t next_free_row, size_t 
 static void Add_Row(size_t db_index, size_t tbl_index, char* contents_address){
 	if(!contents_address){ printf("[ERR] Empty memory location of contents while adding a row.\n"); return; }
 	if(THIS_TABLE->table_full) { printf("[ERR] Unable to add entry to table [%s] in database [%s], the table has no free entries.\n"
-					    , THIS_TABLE->tbl_name, dbs[db_index]->db_name); return; }
-        char* struct_mem = THIS_TABLE->table_ptr;
+				, THIS_TABLE->tbl_name, dbs[db_index]->db_name); return; }
+        
+	char* struct_mem = THIS_TABLE->table_ptr;
 	struct_mem += (THIS_TABLE->next_free_row * ( (THIS_TABLE->columns)  * ROW_ENTRY_SIZ ));
+        uint32_t next_free = THIS_TABLE->next_free_row;
+	char* ptr = (char*)&next_free;
+	for(size_t i = 0; i < sizeof(uint32_t); ++i){
+		if((*(ptr + i)) || ( (!(*(ptr + i))) && (i == 0) ) ) { (*(ptr + i)) += 48; }
+		memcpy((void*)(contents_address + i), (void*)(ptr + i), sizeof(char));
+	}
 
 	/* Now struct_mem is at the memory location of the desired row in the table. */
 	for(size_t i = 0; i < THIS_TABLE->columns; ++i){
@@ -108,12 +116,11 @@ static void Add_Row(size_t db_index, size_t tbl_index, char* contents_address){
 	++THIS_TABLE->active_entries;
 
         printf(
-                "[OK] Edited entry [%lu] in table [%s] in database [%s]\n",
+                "[OK] Edited entry [%u] in table [%s] in database [%s]\n",
                 THIS_TABLE->next_free_row,
                 THIS_TABLE->tbl_name,
                 dbs[db_index]->db_name
               );
-
 
 	++THIS_TABLE->next_free_row;
 	size_t free_row_i = THIS_TABLE->next_free_row;
@@ -183,6 +190,7 @@ void Delete_Row(size_t db_index, size_t tbl_index, size_t row_index){
 	printf("[OK] Erased row [%lu] of table [%s] in database [%s]\n", row_index, THIS_TABLE->tbl_name, dbs[db_index]->db_name);
 }
 
+/*
 void Delete_Table(size_t db_index, size_t tbl_index){
 	for(size_t i = 0; i < INITIAL_ROWS; ++i){ Delete_Row(db_index, tbl_index, i); }	
 	free(THIS_TABLE->table_ptr);
@@ -193,6 +201,7 @@ void Delete_Database(size_t db_index){
 	for(size_t i = 0; i < 64; ++i){ Delete_Table(db_index, i); }
 	free(dbs[db_index]);
 }
+*/
 
 void Save_System(){
 	print_yellow(); printf("\n\n\n********************** INITIATING SYSTEM SAVING *******************************\n\n\n"); print_reset();
@@ -219,7 +228,7 @@ void Save_System(){
 			else{ printf("[OK] Wrote to savefile %lu bytes of table name [%s] in database [%s].\n",
 				       	bytes_written, dbs[a]->tables[b]->tbl_name, dbs[a]->db_name); }
 
-                        if(!(bytes_written = fwrite(&dbs[a]->tables[b]->next_free_row, 1, 8, savefile)))
+                        if(!(bytes_written = fwrite(&dbs[a]->tables[b]->next_free_row, 1, 4, savefile)))
                                 { print_red(); printf("[ERR] Could not write next free row of table [%s] in database [%s] to savefile.\n",
                                                 dbs[a]->tables[b]->tbl_name, dbs[a]->db_name); print_reset(); }
                         else{ printf("[OK] Wrote to savefile next free row of table [%s] in database [%s].\n",
@@ -272,7 +281,7 @@ void Load_System(){
         FILE* savefile;
 	char buffer[128];
 	unsigned char table_full = 0;
-	size_t next_free_row = 0;
+	uint32_t next_free_row = 0;
 	memset(buffer, 0x0, 128);
         size_t bytes_read = 0, databases = 0, tables = 0, rows = 0, cols = 0;
         if(!(savefile = fopen("xdb_saved.dat", "r"))){ printf("[ERR] Could not open save file.\n"); }
@@ -297,7 +306,7 @@ void Load_System(){
                                 { print_red(); printf("[ERR] Could not read table name of table [%s] in database [%s] from savefile.\n", buffer, dbs[a]->db_name); print_reset(); }
                         else{ printf("[OK] Read table name [%s] in database [%s] from savefile.\n", buffer, dbs[a]->db_name); }
 
-                        if(!(bytes_read = fread(&next_free_row, 1, 8, savefile)))
+                        if(!(bytes_read = fread(&next_free_row, 1, 4, savefile)))
                                 { print_red(); printf("[ERR] Could not read next free row index of table [%s] in database [%s] from savefile.\n", buffer, dbs[a]->db_name); print_reset(); }
                         else{ printf("[OK] Read next free row index of table [%s] in database [%s] from savefile.\n", buffer, dbs[a]->db_name); }
 
@@ -347,7 +356,7 @@ void Load_System(){
 }
 int main(){
 	memset(dbs, 0x0, 64*sizeof(struct database*));
-	
+/*	
 	Load_System();
 	Print_Table(0, 0);
 	Print_Table(0, 1);
@@ -355,46 +364,62 @@ int main(){
 	Load_System();
 	Print_Table(0, 0);
 	Print_Table(0, 1);
+*/
 
-
-/* 
+ 
 	Create_Database("Veterinarian");
-	Create_Table(0, 0, 4, "Pets", 0);
+	Create_Table(0, 0, 3, "Pets", 0);
 
 	char col_buffer[10 * ROW_ENTRY_SIZ];
+	memset(col_buffer, 0x0, 10 * ROW_ENTRY_SIZ);
 	size_t entry_siz_aux = 0;
-
+	
         //  Usually this row string will come from a system source such
         //  as a web server on the databases' socket buffer (w/o entry #).
         //  Its bytes will be printable and a Line Feed will divide each entry.
         //  A null byte will be guaranteed to terminate the string.
 	//  Each thread will have exactly one input string row buffer.
         //  For this example we just initialize a bunch of strings to test the macro.
-	char *row0 = malloc(128), *row1 = malloc(128), *row2 = malloc(128), *row3 = malloc(128);
-	strcpy(row0, "ID Name Owner Illness\0");
-	strcpy(row1, "1 Sarah Natalia Tubercolosis\0");
-	strcpy(row2, "2 Xerox Taratatulia Lung_Disease\0");
-	strcpy(row3, "3 Masha Stefanov Code_Problems");
+	char *row0 = malloc(128), *row1 = malloc(128), *row2 = malloc(128), *row3 = malloc(128)
+	    ,*row4 = malloc(128), *row5 = malloc(128), *row6 = malloc(128);	
+	strcpy(row0, "Name Owner Condition\0");
+	strcpy(row1, "Sarah Natalia Tubercolosis\0");
+	strcpy(row2, "Usya NankaKalpazanka Lung_Disease\0");
+	strcpy(row3, "Masha Kevin Code_Problems\0");
+	strcpy(row4, "Miki Mimulya Happy\0");
+	strcpy(row5, "Kiki Mimulya Happy\0");
+	strcpy(row6, "Azor_Giraffe Baba_Marina Very_Happy\0");
 		
-        CONSTRUCT_ROW_BUFFER(col_buffer, row0, 4, entry_siz_aux);     
+	
+
+        CONSTRUCT_ROW_BUFFER(col_buffer + ROW_ENTRY_SIZ, row0, 3, entry_siz_aux);     
 	Add_Row(0, 0, col_buffer);
 	
-	CONSTRUCT_ROW_BUFFER(col_buffer, row1, 4, entry_siz_aux);
+	CONSTRUCT_ROW_BUFFER(col_buffer + ROW_ENTRY_SIZ, row1, 3, entry_siz_aux);
 	Add_Row(0, 0, col_buffer);
 
-	CONSTRUCT_ROW_BUFFER(col_buffer, row2, 4, entry_siz_aux);
+	CONSTRUCT_ROW_BUFFER(col_buffer + ROW_ENTRY_SIZ, row2, 3, entry_siz_aux);
 	Add_Row(0, 0, col_buffer);
 
-	CONSTRUCT_ROW_BUFFER(col_buffer, row3, 4, entry_siz_aux);
+	CONSTRUCT_ROW_BUFFER(col_buffer + ROW_ENTRY_SIZ, row3, 3, entry_siz_aux);
+	Add_Row(0, 0, col_buffer);
+
+	CONSTRUCT_ROW_BUFFER(col_buffer + ROW_ENTRY_SIZ, row4, 3, entry_siz_aux);
+	Add_Row(0, 0, col_buffer);
+
+	CONSTRUCT_ROW_BUFFER(col_buffer + ROW_ENTRY_SIZ, row5, 3, entry_siz_aux);
+	Add_Row(0, 0, col_buffer);
+
+	CONSTRUCT_ROW_BUFFER(col_buffer + ROW_ENTRY_SIZ, row6, 3, entry_siz_aux);
 	Add_Row(0, 0, col_buffer);
 
 	Print_Table(0, 0);
 
-	Create_Table(0, 0, 4, "Doctors", 0);
+	Create_Table(0, 0, 3, "Doctors", 0);
 
 	Save_System();
 
-*/
+
 	return 0;
 
 }
