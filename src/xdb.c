@@ -342,7 +342,7 @@ void Load_System(){
                 }
         }
         fclose(savefile);
-        print_yellow(); printf("\n\n\n********************** SYSTEM LOADING SUCCESS ******************************\n\n\n"); print_reset();
+        print_yellow(); printf("\n\n\n*********************** SYSTEM LOADING SUCCESS ******************************\n\n\n"); print_reset();
 
 }
 int main(){
