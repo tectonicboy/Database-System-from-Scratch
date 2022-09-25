@@ -359,6 +359,21 @@ void Load_System(){
         print_yellow(); printf("\n\n\n*********************** SYSTEM LOADING SUCCESS ******************************\n\n\n"); print_reset();
 
 }
+
+void Process_XSL_Command(char* cmd){
+
+	/* Command to add a database. 
+	 * DB name must be 0-terminated, and at most 64 chars (including \0).
+	 * Example: add_db-Veterinarian\0
+	 */
+	if(!strncmp(cmd, "add_db", 6)){
+		Create_Database(cmd + 7); return;
+	}
+	else if(!strncmp()){
+
+	}
+}
+
 int main(){
 	memset(dbs, 0x0, 64*sizeof(struct database*));
 /*	
