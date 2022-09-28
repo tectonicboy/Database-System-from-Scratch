@@ -362,16 +362,31 @@ void Load_System(){
 
 void Process_XSL_Command(char* cmd){
 
+	uint16_t pos = 0;
+
 	/* Command to add a database. 
 	 * DB name must be 0-terminated, and at most 64 chars (including \0).
 	 * Example: add_db-Veterinarian\0
 	 */
-	if(!strncmp(cmd, "add_db", 6)){
-		Create_Database(cmd + 7); return;
+	if(!strncmp(cmd, "add_db", 6)){ Create_Database(cmd + 7); return; }
+	
+	else if(!strncmp(cmd, "add_tbl", 7)){
+		char *tbl_name, *row_string;
+		uint8_t name_mismatch_flag = 0;
+		pos = 8;
+		tbl_name = cmd + 8;
+		while(*(cmd + pos) != '-'){ ++pos; }
+		if(strncmp(cmd + pos, "-indb-", 6)){printf("[ERR] Invalid command to add a table.\n");}
+	        else{
+			for(size_t j = 1; j <= num_dbs; ++l){
+				for(size_t i = 0; *(cmd + pos + i) == '-'; ++i){
+					if(
+				}
+		}	
+		
+		
 	}
-	else if(!strncmp()){
 
-	}
 }
 
 int main(){
@@ -438,8 +453,7 @@ int main(){
 	Create_Table(0, 0, 3, "Doctors", 0);
 
 	Save_System();
-
-
+	
 	return 0;
 
 }
