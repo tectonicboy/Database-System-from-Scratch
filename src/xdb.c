@@ -60,69 +60,7 @@ void print_red()    { printf("\033[1;31m");}
 void print_yellow() { printf("\033[1;33m");}
 
 void print_reset()  { printf("\033[0m"); }
-
-void Process_XSI_Command(char* cmd, char* out_buf){
-
-        uint16_t pos   = 0;
-        uint64_t flags = 0;
-        /* Command to add a database. 
-         * DB name must be 0-terminated, and at most 64 chars (including \0).
-         * Example: add_db-Veterinarian\0
-         */
-        if(!strncmp(cmd, "add_db", 6) && (strlen(cmd) > 8)){ Create_Database(cmd + 7); return; }
-
-        else if(!strncmp(cmd, "add_tbl", 7)){
-                char *tbl_name, *row_string;
-                pos = 8;
-                tbl_name = cmd + 8;
-                while(*(cmd + pos) != '-'){ ++pos; }
-                if(strncmp(cmd + pos, "-indb-", 6)){printf("[ERR] Invalid command to add a table.\n");}
-                else{
-                        pos += 6;
-
-                        /* Use the last 8 bits of the 64-bit FLAGS to store the value of the
-                         * inner-loop control variable that would have otherwise been lost.
-                         */
-                        for(size_t j = 0; j < num_dbs; ++j){
-                                flags &= ~(((uint64_t)1) << 63);
-                                for(uint8_t i = 0; *(cmd + pos + i) == '-'; ++i){
-                                        if(*(cmd + pos + i) != *(dbs[j]->db_name + i)){
-                                                flags |= (((uint64_t)1) << 63);
-                                                break;
-                                        }
-                                        *((&flags) + 56) = i;
-                                }
-                                if(
-                                   (!(flags & (((uint64_t)1) << 63)))
-                                   &&
-                                   (!(*(dbs[j]->db_name + (uint8_t)(*((&flags) + 56)) + 1)))
-                                  )
-                                {
-                                        pos += (uint8_t)(*((&flags) + 56)) + 2;
-					*((&flags) + 56) = (uint8_t)((*(cmd + pos)) - 48);
-                                        Create_Table(
-                                                      0
-                                                     ,0
-                                                     ,(uint8_t)(*(&flags + 56))
-                                                     ,tbl_name
-                                                     ,j
-                                                    );
-                                        break;
-                                }
-                        }
-			/* At the start of the column names, each \0-terminated and delimited with - */
-			pos += 2;
-			for(uint8_t i = 0; i < (uint8_t)(*(&flags + 56)); ++i){
-				while(*(cmd + pos) != '-'){
-					
-				}
-			}
-                }
-        }
-
-}
-
-
+                          
 static void Create_Database(char* name){
 	if(num_dbs == MAX_DATABASES){ printf("[ERR] Maximum number of databases already created.\n"); return; }
 	if(!name){ printf("[ERR] Empty database name address."); return;  }
@@ -425,6 +363,131 @@ void Load_System(){
 
 }
 
+void Process_XSI_Command(char* cmd, char* out_buf){
+	uint8_t  aux   = 0;
+        uint16_t pos   = 0;
+        uint64_t flags = 0;
+	char row_string[256], row_buffer[256];
+	memset(row_string, 0x0, sizeof(char));
+	memset(row_buffer, 0x0, sizeof(char));
+        /* Command to add a database. 
+         * DB name must be 0-terminated, and at most 64 chars (including \0).
+         * Example: add_db-Veterinarian\0
+         */
+        if(!strncmp(cmd, "add_db", 6) && (strlen(cmd) > 8)){ Create_Database(cmd + 7); return; }
+
+        else if(!strncmp(cmd, "add_tbl", 7)){
+                char *tbl_name, *row_string;
+                pos = 8;
+                tbl_name = cmd + 8;
+                while(*(cmd + pos) != '-'){ ++pos; }
+                if(strncmp(cmd + pos, "-indb-", 6)){ print_red(); printf("[ERR] Invalid command to add a table. Missing '-indb-'. pos = %u\n", pos); print_reset(); }
+                else{
+                        pos += 6;
+
+                        /* Use the second byte of the 64-bit FLAGS to store the value of the
+                         * inner-loop control variable that would have otherwise been lost.
+			 * And for other similar temporary/auxilliary values.
+                         */
+                        for(uint8_t j = 0; j < num_dbs; ++j){
+                                flags &= ~(((uint64_t)1) << 63);
+                                for(uint8_t i = 0; *(cmd + pos + i) == '-'; ++i){
+                                        if(*(cmd + pos + i) != *(dbs[j]->db_name + i)){
+                                                flags |= (((uint64_t)1) << 63);
+                                                break;
+                                        }
+                                        *( (char*)&flags + 1 ) = i;
+                                }
+                                if(
+                                   (!(flags & (((uint64_t)1) << 63)))
+                                   &&
+                                   (!(*(dbs[j]->db_name + (uint8_t)( *( (char*)&flags + 1 ) ) )))
+                                  )
+                                {
+                                        pos += (uint8_t)(*( (char*)&flags + 1 )) + 2;
+					*( (char*)&flags + 1 ) = (uint8_t)((*(cmd + pos)) - 48);
+                                         
+					/* Save j here so we can postpone the Create_Table call
+					 * until we've made sure all the column names are valid.
+					 */
+					*( (char*)&flags + 2 ) = j;
+                                        break;
+                                }
+                        }
+			/* At the start of the column names, delimited with - */
+			pos += 2;
+			*((char*)&flags + 4) = (uint8_t)1;
+			for(uint8_t i = 0; i < (uint8_t)(*( (char*)&flags + 1)); ++i){
+				while(
+				      *(cmd + pos) != '-'
+				      && 
+				      (uint8_t)( *( (char*)&flags + 3 ) ) < ROW_ENTRY_SIZ
+				     )
+				{
+					++pos;
+					*((char*)&flags + 3) += (uint8_t)1;
+				}
+
+				/*  Now, pos is at the byte immediately AFTER the row entry, 
+				 *  and the 4th byte of flags holds how long that entry was.
+				 *  Accumulate total size of all row entries in the 5th byte
+				 *  of flags, so that we know where to write in row_string.
+				 */
+				if(
+				   *((char*)&flags + 3) == (uint8_t)ROW_ENTRY_SIZ
+				   &&
+				   *(cmd + pos) != '-' 
+				  )
+				{
+					print_red(); printf("[ERR] Command to add a table was invalid. Column name too long.\n"); print_reset();
+					return;
+				}
+				
+				/* Add the column name to the row_string to be fed to the memory construction macro */
+				strncpy(
+					 row_string + ( (uint8_t)(*((char*)&flags + 4)) ) - 1
+					,cmd + pos  - ( (uint8_t)(*((char*)&flags + 4)) )
+					,(uint8_t)(*((char*)&flags + 4))
+				       );	
+				*((char*)&flags + 4) += (uint8_t)*((char*)&flags + 3);
+
+				/* Add the required empty space between entries in said string */
+				if(i < ((uint8_t)(*( (char*)&flags + 1))) - 1){
+					row_string[( (uint8_t)(*((char*)&flags + 4)) ) - 1] = ' ';
+					*((char*)&flags + 4) += (uint8_t)1;
+				}
+
+				/* Reset count of current column name's length */
+				*((char*)&flags + 3) = (uint8_t)0;
+
+				/* Move past the dash and at the start of the next column name */
+				++pos;
+			}
+
+			Create_Table(
+                                      0
+                                     ,0
+                                     ,(uint8_t)(*( (char*)&flags + 1))
+                                     ,tbl_name
+                                     ,(uint8_t)(*( (char*)&flags + 2))
+                                    );
+
+		        CONSTRUCT_ROW_BUFFER(
+					      row_buffer
+					     ,row_string
+					     ,(uint8_t)(*( (char*)&flags + 1))
+					     ,aux
+					    );
+
+        		Add_Row(
+				 (uint8_t)(*( (char*)&flags + 2))
+				,dbs[(uint8_t)(*( (char*)&flags + 1))]->active_tables - 1
+				,row_buffer
+			       );
+                }
+        }
+}
+
 int main(){
 	memset(dbs, 0x0, 64*sizeof(struct database*));
 /*	
@@ -489,7 +552,12 @@ int main(){
 	Create_Table(0, 0, 4, "Doctors", 0);
 
 	Save_System();
-	
+
+	char cmd[512];
+	memset(cmd, 0x0, sizeof(char));
+	memcpy((void*)cmd, "add_tbl-Offices\0-indb-Veterinarian-6-idk1-idk2-idk3-idk4-idk5-idk6-\0", 68);
+	Process_XSI_Command(cmd, col_buffer);
+	Print_Table(0, 2);
 	return 0;
 
 }
