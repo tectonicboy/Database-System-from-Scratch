@@ -33,6 +33,7 @@
 		++(STR);							\
 		(AUX) = 0; 							\
 	}
+
 struct __attribute__ ((__packed__))  database {
 	char db_name[64];
 	size_t active_tables;	
