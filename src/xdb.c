@@ -32,8 +32,7 @@
 		strncpy((PTR) + (p * ROW_ENTRY_SIZ), ((STR) - (AUX)), (AUX)); 	\
 		++(STR);							\
 		(AUX) = 0; 							\
-	}									\
-
+	}
 struct __attribute__ ((__packed__))  database {
 	char db_name[64];
 	size_t active_tables;	
@@ -367,9 +366,11 @@ void Process_XSI_Command(char* cmd, char* out_buf){
 	uint8_t  aux   = 0;
         uint16_t pos   = 0;
         uint64_t flags = 0;
-	char row_string[256], row_buffer[256];
-	memset(row_string, 0x0, sizeof(char));
-	memset(row_buffer, 0x0, sizeof(char));
+	char *row_string = malloc(256);
+	char *row_buffer = malloc(256);
+	char *str_old = row_string, *buf_old = row_buffer;
+	memset(row_string, 0x0, 256);
+	memset(row_buffer, 0x0, 256);
         /* Command to add a database. 
          * DB name must be 0-terminated, and at most 64 chars (including \0).
          * Example: add_db-Veterinarian\0
@@ -377,7 +378,7 @@ void Process_XSI_Command(char* cmd, char* out_buf){
         if(!strncmp(cmd, "add_db", 6) && (strlen(cmd) > 8)){ Create_Database(cmd + 7); return; }
 
         else if(!strncmp(cmd, "add_tbl", 7)){
-                char *tbl_name, *row_string;
+                char *tbl_name;
                 pos = 8;
                 tbl_name = cmd + 8;
                 while(*(cmd + pos) != '-'){ ++pos; }
@@ -391,20 +392,21 @@ void Process_XSI_Command(char* cmd, char* out_buf){
                          */
                         for(uint8_t j = 0; j < num_dbs; ++j){
                                 flags &= ~(((uint64_t)1) << 63);
-                                for(uint8_t i = 0; *(cmd + pos + i) == '-'; ++i){
+                                for(uint8_t i = 0; /* *(cmd + pos + i) != '-'*/ ; ++i){
                                         if(*(cmd + pos + i) != *(dbs[j]->db_name + i)){
                                                 flags |= (((uint64_t)1) << 63);
+						*( (char*)&flags + 1 ) = i;
                                                 break;
                                         }
                                         *( (char*)&flags + 1 ) = i;
                                 }
                                 if(
-                                   (!(flags & (((uint64_t)1) << 63)))
+                                   ((flags & (((uint64_t)1) << 63)))
                                    &&
                                    (!(*(dbs[j]->db_name + (uint8_t)( *( (char*)&flags + 1 ) ) )))
                                   )
                                 {
-                                        pos += (uint8_t)(*( (char*)&flags + 1 )) + 2;
+                                        pos += (uint8_t)(*( (char*)&flags + 1 )) + 1;
 					*( (char*)&flags + 1 ) = (uint8_t)((*(cmd + pos)) - 48);
                                          
 					/* Save j here so we can postpone the Create_Table call
@@ -444,17 +446,19 @@ void Process_XSI_Command(char* cmd, char* out_buf){
 				}
 				
 				/* Add the column name to the row_string to be fed to the memory construction macro */
+				uint8_t pad = 1;
+				
 				strncpy(
-					 row_string + ( (uint8_t)(*((char*)&flags + 4)) ) - 1
-					,cmd + pos  - ( (uint8_t)(*((char*)&flags + 4)) )
-					,(uint8_t)(*((char*)&flags + 4))
+					 row_string + ( (uint8_t)(*((char*)&flags + 4)) ) - 1 + (i*pad)
+					,cmd + pos  - ( (uint8_t)(*((char*)&flags + 3)) )
+					,(uint8_t)(*((char*)&flags + 3))
 				       );	
 				*((char*)&flags + 4) += (uint8_t)*((char*)&flags + 3);
 
 				/* Add the required empty space between entries in said string */
 				if(i < ((uint8_t)(*( (char*)&flags + 1))) - 1){
-					row_string[( (uint8_t)(*((char*)&flags + 4)) ) - 1] = ' ';
-					*((char*)&flags + 4) += (uint8_t)1;
+					row_string[( (uint8_t)(*((char*)&flags + 4)) ) - 1 + (i*pad)] = ' ';
+					/* *((char*)&flags + 3) += (uint8_t)1; */
 				}
 
 				/* Reset count of current column name's length */
@@ -465,25 +469,24 @@ void Process_XSI_Command(char* cmd, char* out_buf){
 			}
 
 			Create_Table(
-                                      0
+           			      0
                                      ,0
                                      ,(uint8_t)(*( (char*)&flags + 1))
                                      ,tbl_name
                                      ,(uint8_t)(*( (char*)&flags + 2))
                                     );
-
-		        CONSTRUCT_ROW_BUFFER(
-					      row_buffer
-					     ,row_string
-					     ,(uint8_t)(*( (char*)&flags + 1))
-					     ,aux
-					    );
+			uint8_t columns = *( (char*)&flags + 1);
+		        CONSTRUCT_ROW_BUFFER(row_buffer, row_string, columns, aux);
 
         		Add_Row(
 				 (uint8_t)(*( (char*)&flags + 2))
-				,dbs[(uint8_t)(*( (char*)&flags + 1))]->active_tables - 1
+				,dbs[(uint8_t)(*( (char*)&flags + 2))]->active_tables - 1
 				,row_buffer
 			       );
+			row_string = str_old;
+			row_buffer = buf_old;
+			free(row_string);
+			free(row_buffer);
                 }
         }
 }
@@ -554,7 +557,7 @@ int main(){
 	Save_System();
 
 	char cmd[512];
-	memset(cmd, 0x0, sizeof(char));
+	memset(cmd, 0x0, 512);
 	memcpy((void*)cmd, "add_tbl-Offices\0-indb-Veterinarian-6-idk1-idk2-idk3-idk4-idk5-idk6-\0", 68);
 	Process_XSI_Command(cmd, col_buffer);
 	Print_Table(0, 2);
