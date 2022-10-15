@@ -189,7 +189,7 @@ void Delete_Row(size_t db_index, size_t tbl_index, size_t row_index){
 	printf("[OK] Erased row [%lu] of table [%s] in database [%s]\n", row_index, THIS_TABLE->tbl_name, dbs[db_index]->db_name);
 }
 
-/*
+/*dbs[(uint8_t)( *((char*)&flags + 2 ) )]->tables[j]->tbl_name
 void Delete_Table(size_t db_index, size_t tbl_index){
 	for(size_t i = 0; i < INITIAL_ROWS; ++i){ Delete_Row(db_index, tbl_index, i); }	
 	free(THIS_TABLE->table_ptr);
@@ -364,6 +364,7 @@ void Load_System(){
 }
 
 void Process_XSI_Command(char* cmd, char* out_buf){
+	char* tbl_name;
 	uint8_t  aux   = 0;
         uint16_t pos   = 0;
         uint64_t flags = 0;
@@ -379,11 +380,11 @@ void Process_XSI_Command(char* cmd, char* out_buf){
         if(!strncmp(cmd, "add_db", 6) && (strlen(cmd) > 8)){ Create_Database(cmd + 7); return; }
 
         else if(!strncmp(cmd, "add_tbl", 7)){
-                char *tbl_name;
                 pos = 8;
                 tbl_name = cmd + 8;
                 while(*(cmd + pos) != '-'){ ++pos; }
-                if(strncmp(cmd + pos, "-indb-", 6)){ print_red(); printf("[ERR] Invalid command to add a table. Missing '-indb-'. pos = %u\n", pos); print_reset(); }
+                if(strncmp(cmd + pos, "-indb-", 6)){ 
+			print_red(); printf("[ERR] Invalid command to add a table. Missing '-indb-'\n"); print_reset(); return;}
                 else{
                         pos += 6;
 
@@ -393,7 +394,7 @@ void Process_XSI_Command(char* cmd, char* out_buf){
                          */
                         for(uint8_t j = 0; j < num_dbs; ++j){
                                 flags &= ~(((uint64_t)1) << 63);
-                                for(uint8_t i = 0; /* *(cmd + pos + i) != '-'*/ ; ++i){
+                                for(uint8_t i = 0; ; ++i){
                                         if(*(cmd + pos + i) != *(dbs[j]->db_name + i)){
                                                 flags |= (((uint64_t)1) << 63);
 						*( (char*)&flags + 1 ) = i;
@@ -405,6 +406,8 @@ void Process_XSI_Command(char* cmd, char* out_buf){
                                    ((flags & (((uint64_t)1) << 63)))
                                    &&
                                    (!(*(dbs[j]->db_name + (uint8_t)( *( (char*)&flags + 1 ) ) )))
+				   &&
+				   ( *(cmd + pos + (uint8_t)(*( (char*)&flags + 1 ))) == '-' )
                                   )
                                 {
                                         pos += (uint8_t)(*( (char*)&flags + 1 )) + 1;
@@ -442,8 +445,7 @@ void Process_XSI_Command(char* cmd, char* out_buf){
 				   *(cmd + pos) != '-' 
 				  )
 				{
-					print_red(); printf("[ERR] Command to add a table was invalid. Column name too long.\n"); print_reset();
-					return;
+					print_red(); printf("[ERR] Invalid cmd to add a table. Column name too long.\n"); print_reset(); return;
 				}
 				
 				/* Add the column name to the row_string to be fed to the memory construction macro */
@@ -490,6 +492,150 @@ void Process_XSI_Command(char* cmd, char* out_buf){
 			free(row_buffer);
                 }
         }
+	else if(!strncmp(cmd, "add_row", 7)){
+		pos = 7;
+		if(strncmp(cmd + pos, "-indb-", 6))
+			{print_red(); printf("[ERR] Invalid command to add a row. -indb- part missing.\n"); print_reset(); return;}
+		pos += 6;
+                flags= 0;
+	   		/* Use the second byte of the 64-bit FLAGS to store the value of the
+                         * inner-loop control variable that would have otherwise been lost.
+                         * And for other similar temporary/auxilliary values.
+                         */
+                        for(uint8_t j = 0; j < num_dbs; ++j){
+                                flags &= ~(((uint64_t)1) << 63);
+                                for(uint8_t i = 0; ; ++i){
+                                        if(*(cmd + pos + i) != *(dbs[j]->db_name + i)){
+                                                flags |= (((uint64_t)1) << 63);
+                                                *( (char*)&flags + 1 ) = i;
+                                                break;uint8_t columns = *( (char*)&flags + 1);
+                        CONSTRUCT_ROW_BUFFER(row_buffer, row_string, columns, aux);
+
+                        Add_Row(
+                                 (uint8_t)(*( (char*)&flags + 2))
+                                ,dbs[(uint8_t)(*( (char*)&flags + 2))]->active_tables - 1
+                                ,row_buffer
+                               );
+                        row_string = str_old;
+                        row_buffer = buf_old;
+                        free(row_string);
+                        free(row_buffer);
+
+                                        }
+                                        *( (char*)&flags + 1 ) = i;
+                                }
+                                if(
+                                   ((flags & (((uint64_t)1) << 63)))
+                                   &&
+                                   (!(*(dbs[j]->db_name + (uint8_t)( *( (char*)&flags + 1 ) ) )))
+				   &&
+                                   ( *(cmd + pos + (uint8_t)(*( (char*)&flags + 1 ))) == '-' )
+                                  )
+                                {
+                                        pos += (uint8_t)(*( (char*)&flags + 1 )) ;
+                                        *( (char*)&flags + 2 ) = j;
+                                        break;
+                                }
+		        }
+			
+		if(strncmp(cmd + pos, "-intbl-", 7))
+                        {print_red(); printf("[ERR] Invalid command to add a row. -intbl- part missing.\n"); print_reset(); return;}
+		pos += 7;
+		        for(uint8_t j = 0; j < dbs[(uint8_t)( *((char*)&flags + 2) )]->active_tables; ++j){
+                                flags &= ~(((uint64_t)1) << 63);
+                                for(uint8_t i = 0; ; ++i){
+                                        if(*(cmd + pos + i) != *(dbs[(uint8_t)( *((char*)&flags + 2 ) )]->tables[j]->tbl_name + i)){
+                                                flags |= (((uint64_t)1) << 63);
+                                                *( (char*)&flags + 3 ) = i;
+                                                break;
+                                        }
+                                        *( (char*)&flags + 3 ) = i;
+                                }
+                                if(
+                                   ((flags & (((uint64_t)1) << 63)))
+                                   &&
+                                   (!(*(dbs[(uint8_t)( *((char*)&flags + 2 ) )]->tables[j]->tbl_name 
+					+ (uint8_t)( *( (char*)&flags + 3 ) ) )))
+                                   &&
+                                   ( *(cmd + pos + (uint8_t)(*( (char*)&flags + 3 ))) == '-' )
+				   )
+                                {
+                                        pos += (uint8_t)(*( (char*)&flags + 3 )) + 1;
+					*( (char*)&flags + 1 ) = dbs[(uint8_t)( *((char*)&flags + 2 ) )]->tables[j]->columns;
+                                        *( (char*)&flags + 4 ) = j;
+                                        break;
+                                }
+                        }
+
+		/*FLAGS +0  first bit is used for control
+		 *	+1  number of columns in the table
+		 *	+2  database index
+		 *	+3  table name length
+		 *	+4  table index
+		 */
+
+		/* At beginning of row names now */
+		 *((char*)&flags + 6) = (uint8_t)1;
+                        for(uint8_t i = 0; i < (uint8_t)(*( (char*)&flags + 1)); ++i){
+                                while(
+                                      *(cmd + pos) != '-'
+                                      &&
+                                      (uint8_t)( *( (char*)&flags + 5 ) ) < ROW_ENTRY_SIZ
+                                     )
+                                {
+                                        ++pos;
+                                        *((char*)&flags + 5) += (uint8_t)1;
+                                }
+
+                                /*  Now, pos is at the byte immediately AFTER the row entry, 
+                                 *  and the 6th byte of flags holds how long that entry was.
+                                 *  Accumulate total size of all row entries in the 7th byte
+                                 *  of flags, so that we know where to write in row_string.
+                                 */
+                                if(
+                                   *((char*)&flags + 5) == (uint8_t)ROW_ENTRY_SIZ
+                                   &&
+                                   *(cmd + pos) != '-'
+                                  )
+                                {
+                                        print_red(); printf("[ERR] Invalid cmd to add a row. Row entry too long.\n"); print_reset(); return;
+                                }
+
+                                /* Add the column name to the row_string to be fed to the memory construction macro */
+                                uint8_t pad = 1;
+
+                                strncpy(
+                                         row_string + ( (uint8_t)(*((char*)&flags + 6)) ) - 1 + (i*pad)
+                                        ,cmd + pos  - ( (uint8_t)(*((char*)&flags + 5)) )
+                                        ,(uint8_t)(*((char*)&flags + 5))
+                                       );
+                                *((char*)&flags + 6) += (uint8_t)*((char*)&flags + 5);
+
+                                /* Add the required empty space between entries in said string */
+                                if(i < ((uint8_t)(*( (char*)&flags + 1))) - 1){
+                                        row_string[( (uint8_t)(*((char*)&flags + 6)) ) - 1 + (i*pad)] = ' ';
+                                        /* *((char*)&flags + 3) += (uint8_t)1; */
+                                }
+
+                                /* Reset count of current column name's length */
+                                *((char*)&flags + 5) = (uint8_t)0;
+
+                                /* Move past the dash and at the start of the next column name */
+                                ++pos;
+                        }
+			uint8_t columns = *( (char*)&flags + 1);
+                        CONSTRUCT_ROW_BUFFER(row_buffer, row_string, columns, aux);
+
+                        Add_Row(
+                                 (uint8_t)(*( (char*)&flags + 2))
+                                ,(uint8_t)(*( (char*)&flags + 4))
+                                ,row_buffer
+                               );
+                        row_string = str_old;
+                        row_buffer = buf_old;
+                        free(row_string);
+                        free(row_buffer);
+	}
 }
 
 int main(){
@@ -559,7 +705,21 @@ int main(){
 
 	char cmd[512];
 	memset(cmd, 0x0, 512);
-	memcpy((void*)cmd, "add_tbl-Offices\0-indb-Veterinarian-6-idk1-idk2-idk3-idk4-idk5-idk6-\0", 68);
+	/* The names of things that already exist in the system (database in the following example)
+	 * dont have a \0 at the end. The things that don't exist (below table name) does have a \0
+	 * at the end so that we can easily set a pointer to it and say "here this is the string".
+	 * As for the row string, it gets copied to a zeroed-out buffer, so that the requirement
+	 * of the row memory construction macro for null termination is met. - at the end is needed
+	 * cuz the individual entries loop searches for a that char to end the entry, or when an
+	 * entry has reached the allowed size for row entries - the ROW_ENTRY_SIZ macro. 
+	 */
+	memcpy((void*)cmd, "add_tbl-Offices\0-indb-Veterinarian-6-idk1-idk2-idk3-idk4-idk5-idk6-", 68);
+	Process_XSI_Command(cmd, col_buffer);
+	memset(cmd, 0x0, 512);
+	/* So in this example neither the database name nor the table name will have \0 cuz they 
+	 * will be checked against the names of already existing tables and databases.
+	 */
+	memcpy((void*)cmd, "add_row-indb-Veterinarian-intbl-Offices-wowzaa1-wowzaa2-wowzaa3-wowzaa4-wowzaa5-wowzaa6-", 89);
 	Process_XSI_Command(cmd, col_buffer);
 	Print_Table(0, 2);
 	return 0;
