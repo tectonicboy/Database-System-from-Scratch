@@ -373,13 +373,22 @@ void Process_XSI_Command(char* cmd, char* out_buf){
 	char *str_old = row_string, *buf_old = row_buffer;
 	memset(row_string, 0x0, 256);
 	memset(row_buffer, 0x0, 256);
+
+/* ***************** ADD DATABASE COMMAND BEGINS ***********************************************************************************************/
+
+
         /* Command to add a database. 
          * DB name must be 0-terminated, and at most 64 chars (including \0).
          * Example: add_db-Veterinarian\0
          */
         if(!strncmp(cmd, "add_db", 6) && (strlen(cmd) > 8)){ Create_Database(cmd + 7); return; }
 
-        else if(!strncmp(cmd, "add_tbl", 7)){
+/* ***************** ADD DATABASE COMMAND ENDS ***********************************************************************************************/
+
+
+/* ***************** ADD TABLE COMMAND BEGINS ***********************************************************************************************/
+        
+	else if(!strncmp(cmd, "add_tbl", 7)){
                 pos = 8;
                 tbl_name = cmd + 8;
                 while(*(cmd + pos) != '-'){ ++pos; }
@@ -492,6 +501,11 @@ void Process_XSI_Command(char* cmd, char* out_buf){
 			free(row_buffer);
                 }
         }
+
+/* ***************** ADD TABLE COMMAND ENDS ***********************************************************************************************/
+
+/******************* ADD ROW COMMAND BEGINS **********************************************************************************************/
+	
 	else if(!strncmp(cmd, "add_row", 7)){
 		pos = 7;
 		if(strncmp(cmd + pos, "-indb-", 6))
@@ -508,19 +522,7 @@ void Process_XSI_Command(char* cmd, char* out_buf){
                                         if(*(cmd + pos + i) != *(dbs[j]->db_name + i)){
                                                 flags |= (((uint64_t)1) << 63);
                                                 *( (char*)&flags + 1 ) = i;
-                                                break;uint8_t columns = *( (char*)&flags + 1);
-                        CONSTRUCT_ROW_BUFFER(row_buffer, row_string, columns, aux);
-
-                        Add_Row(
-                                 (uint8_t)(*( (char*)&flags + 2))
-                                ,dbs[(uint8_t)(*( (char*)&flags + 2))]->active_tables - 1
-                                ,row_buffer
-                               );
-                        row_string = str_old;
-                        row_buffer = buf_old;
-                        free(row_string);
-                        free(row_buffer);
-
+                                                break;
                                         }
                                         *( (char*)&flags + 1 ) = i;
                                 }
@@ -558,7 +560,7 @@ void Process_XSI_Command(char* cmd, char* out_buf){
 					+ (uint8_t)( *( (char*)&flags + 3 ) ) )))
                                    &&
                                    ( *(cmd + pos + (uint8_t)(*( (char*)&flags + 3 ))) == '-' )
-				   )
+				  )
                                 {
                                         pos += (uint8_t)(*( (char*)&flags + 3 )) + 1;
 					*( (char*)&flags + 1 ) = dbs[(uint8_t)( *((char*)&flags + 2 ) )]->tables[j]->columns;
@@ -636,6 +638,10 @@ void Process_XSI_Command(char* cmd, char* out_buf){
                         free(row_string);
                         free(row_buffer);
 	}
+
+/* ***************** ADD ROW COMMAND ENDS ***********************************************************************************************/
+
+
 }
 
 int main(){
@@ -725,6 +731,7 @@ int main(){
 	return 0;
 
 }
+
 
 
 
