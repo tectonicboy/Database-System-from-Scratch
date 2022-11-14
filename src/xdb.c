@@ -25,20 +25,20 @@
  *  arg4: Auxilliary variable name (unsigned integer) accessible 
  *        from the same scope the macro is invoked in.
  */
-#define CONSTRUCT_ROW_BUFFER(PTR, STR, COLS, AUX)     				    \
-	memset((void*)(PTR), 0x0, ROW_ENTRY_SIZ * (COLS)); 			        \
-    for(size_t p = 0; p < (COLS); ++p){	  				                \
-		while( (*(STR)) && (*(STR) != ' ') ){ 				            \
-			++(AUX);						                            \
-			++(STR);						                            \
-	    } 								                                \
+#define CONSTRUCT_ROW_BUFFER(PTR, STR, COLS, AUX)                       \
+	memset((void*)(PTR), 0x0, ROW_ENTRY_SIZ * (COLS));                  \
+    for(size_t p = 0; p < (COLS); ++p){                                 \
+		while( (*(STR)) && (*(STR) != ' ') ){                           \
+			++(AUX);                                                    \
+			++(STR);                                                    \
+	    }                                                               \
 		strncpy(                                                        \
 		        (PTR) + (p * ROW_ENTRY_SIZ)                             \
 		       ,((STR) - (AUX))                                         \
 		       ,(AUX)                                                   \
-		       ); 	                                                    \
-		++(STR);							                            \
-		(AUX) = 0; 							                            \
+		       );                                                       \
+		++(STR);                                                        \
+		(AUX) = 0;                                                      \
 	}
 
 struct __attribute__ ((__packed__))  database {
