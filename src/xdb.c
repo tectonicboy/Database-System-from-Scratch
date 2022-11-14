@@ -14,24 +14,31 @@
 #define MAX_DATABASES  64
 #define INITIAL_ROWS   10000000
 
-#define THIS_TABLE dbs[db_index]->tables[tbl_index]
+#define NEXT_FREE_TBL     dbs[db_index]->tables[dbs[db_index]->active_tables]
+#define THIS_TABLE        dbs[db_index]->tables[tbl_index]
   
 /*  Parameterized macro to populate a buffer to be fed to Edit_Row().
- *  arg1: char* for buffer to be fed to Edit_Row(). The buffer this macro will be populating. 
+ *  arg1: char* for the buffer to be fed to Edit_Row(). 
+ *        The buffer this macro will be populating. 
  *  arg2: char* for a string of space-separated column names. \0-terminated.
  *  arg3: literal unsigned integer for number of columns in the table
- *  arg4: Auxilliary variable name (unsigned integer) accessible from the same scope the macro is invoked in.
+ *  arg4: Auxilliary variable name (unsigned integer) accessible 
+ *        from the same scope the macro is invoked in.
  */
-#define CONSTRUCT_ROW_BUFFER(PTR, STR, COLS, AUX)     				\
-	memset((void*)(PTR), 0x0, ROW_ENTRY_SIZ * (COLS)); 			\
-        for(size_t p = 0; p < (COLS); ++p){	  				\
-		while( (*(STR)) && (*(STR) != ' ') ){ 				\
-			++(AUX);						\
-			++(STR);						\
-	       	} 								\
-		strncpy((PTR) + (p * ROW_ENTRY_SIZ), ((STR) - (AUX)), (AUX)); 	\
-		++(STR);							\
-		(AUX) = 0; 							\
+#define CONSTRUCT_ROW_BUFFER(PTR, STR, COLS, AUX)     				    \
+	memset((void*)(PTR), 0x0, ROW_ENTRY_SIZ * (COLS)); 			        \  
+    for(size_t p = 0; p < (COLS); ++p){	  				                \
+		while( (*(STR)) && (*(STR) != ' ') ){ 				            \
+			++(AUX);						                            \
+			++(STR);						                            \
+	    } 								                                \
+		strncpy(                                                        \
+		        (PTR) + (p * ROW_ENTRY_SIZ)                             \
+		       ,((STR) - (AUX))                                         \
+		       ,(AUX)                                                   \
+		       ); 	                                                    \
+		++(STR);							                            \
+		(AUX) = 0; 							                            \
 	}
 
 struct __attribute__ ((__packed__))  database {
@@ -45,14 +52,14 @@ struct __attribute__ ((__packed__)) table {
 	size_t active_entries;
 	uint8_t columns;
 	uint32_t next_free_row;
-	char* table_ptr; /* memory address of the actual table */
+	char* table_ptr;  /* memory address of the actual table */
 	unsigned char table_full;
 };
 
-//The global array of databases.
+/*The global array of databases.*/
 struct database* dbs[MAX_DATABASES];
 
-//How many databases are present in the system.
+/*How many databases are present in the system. */
 size_t num_dbs = 0;
 
 void print_red()    { printf("\033[1;31m");}
@@ -62,8 +69,14 @@ void print_yellow() { printf("\033[1;33m");}
 void print_reset()  { printf("\033[0m"); }
                           
 static void Create_Database(char* name){
-	if(num_dbs == MAX_DATABASES){ printf("[ERR] Maximum number of databases already created.\n"); return; }
-	if(!name){ printf("[ERR] Empty database name address."); return;  }
+	if(num_dbs == MAX_DATABASES){
+	    printf("[ERR] Maximum number of databases already created.\n"); 
+	    return; 
+	}
+	if(!name){ 
+	    printf("[ERR] Empty database name address."); 
+	    return;  
+	}
 	dbs[num_dbs] = (struct database*)malloc(sizeof(struct database));
 	memset(dbs[num_dbs]->db_name, 0x0, 64);
 	strcpy(dbs[num_dbs]->db_name, name);
@@ -71,69 +84,103 @@ static void Create_Database(char* name){
 	dbs[num_dbs]->active_tables = 0;
 	++num_dbs;
 	printf("[OK] Created database [%s] successfully.\n", name);
+	return;
 }
 
-//Initially allocate enough memory for INITIAL_ROWS rows. Keep track of number of entries.
-static void Create_Table(unsigned char table_full, size_t next_free_row, uint8_t cols, char* tbl_name, size_t db_index){
-	if(dbs[db_index]->active_tables == MAX_TABLES){ printf("[ERR] Database already has max number of tables.\n"); return; }
-	if(!tbl_name){printf("[ERR] Empty address of table name to be added to the database.\n"); return;}
-	dbs[db_index]->tables[dbs[db_index]->active_tables] = malloc(sizeof(struct table));
-	memset(dbs[db_index]->tables[dbs[db_index]->active_tables]->tbl_name, 0x0, 64);
+//Allocate enough memory for INITIAL_ROWS rows. Keep track of number of entries.
+static void Create_Table(
+                         uint8_t  table_full
+                        ,uint8_t  cols
+                        ,uint32_t next_free_row
+                        ,uint32_t db_index
+                        ,char*    tbl_name
+                        )
+{
+	if(dbs[db_index]->active_tables == MAX_TABLES){ 
+	    printf("[ERR] Database already has max number of tables.\n"); 
+	    return; 
+	}
+	if(!tbl_name){
+	    printf("[ERR] Empty address of name of table to be added.\n"); 
+	    return;
+	}
+	NEXT_FREE_TBL = malloc(sizeof(struct table));
+	memset(NEXT_FREE_TBL->tbl_name, 0x0, 64);
 	strcpy(
-		dbs[db_index]->tables[dbs[db_index]->active_tables]->tbl_name,
+		    NEXT_FREE_TBL->tbl_name,
 	       	tbl_name
 	      );
-        dbs[db_index]->tables[dbs[db_index]->active_tables]->table_ptr = malloc(INITIAL_ROWS * cols * ROW_ENTRY_SIZ);
-	dbs[db_index]->tables[dbs[db_index]->active_tables]->columns = cols;
-	dbs[db_index]->tables[dbs[db_index]->active_tables]->next_free_row = next_free_row;
-	dbs[db_index]->tables[dbs[db_index]->active_tables]->table_full = table_full;
+    NEXT_FREE_TBL->table_ptr = malloc(INITIAL_ROWS * cols * ROW_ENTRY_SIZ);
+	NEXT_FREE_TBL->columns = cols;
+	NEXT_FREE_TBL->next_free_row = next_free_row;
+	NEXT_FREE_TBL->table_full = table_full;
 	++dbs[db_index]->active_tables;
-	printf("[OK] Table [%s] added to database [%s] successfully.\n", tbl_name, dbs[db_index]->db_name);
+	printf(
+	        "[OK] Table [%s] added to database [%s] successfully.\n"
+	       ,tbl_name
+	       ,dbs[db_index]->db_name
+	      );
 }	
 
-//We know how much memory a row will contain by checking that table in that database.
-//That's why we only need an address, then we can start reading chunks of ROW_ENTRY_SIZ bytes.
+/* We know how much memory a row will contain by checking that table in
+ * that database. That's why we only need an address, then
+ * we can start reading chunks of ROW_ENTRY_SIZ bytes.
+ */
 static void Add_Row(size_t db_index, size_t tbl_index, char* contents_address){
-	if(!contents_address){ printf("[ERR] Empty memory location of contents while adding a row.\n"); return; }
-	if(THIS_TABLE->table_full) { printf("[ERR] Unable to add entry to table [%s] in database [%s], the table has no free entries.\n"
-				, THIS_TABLE->tbl_name, dbs[db_index]->db_name); return; }
+	if(!contents_address){ 
+	    printf("[ERR] Empty memory location of contents while adding a row.\n"); 
+	    return; 
+	}
+	if(THIS_TABLE->table_full) { 
+	    printf(  "[ERR] Unable to add entry to table [%s] in database [%s], "
+	             "the table has no free entries.\n"
+				,THIS_TABLE->tbl_name
+				,dbs[db_index]->db_name
+			  ); 
+	    return; 
+	}
         
 	char* struct_mem = THIS_TABLE->table_ptr;
 
-
-	/* Get struct_mem to the memory location of the desired row in the table and start populating. */
-	struct_mem += (THIS_TABLE->next_free_row * ( (THIS_TABLE->columns)  * ROW_ENTRY_SIZ ));
+	/* Get struct_mem to the memory location of the desired row
+	 * in the table and start populating that row.
+	 */
+	struct_mem +=   THIS_TABLE->next_free_row 
+	              * THIS_TABLE->columns 
+	              * ROW_ENTRY_SIZ;
 
 	for(size_t i = 0; i < THIS_TABLE->columns; ++i){
-                memcpy((void*)struct_mem, (void*)contents_address, ROW_ENTRY_SIZ);
-                struct_mem += ROW_ENTRY_SIZ;
-                contents_address += ROW_ENTRY_SIZ;
-        }
+            memcpy((void*)struct_mem, (void*)contents_address, ROW_ENTRY_SIZ);
+            struct_mem += ROW_ENTRY_SIZ;
+            contents_address += ROW_ENTRY_SIZ;
+    }
 
 	++THIS_TABLE->active_entries;
 
-        printf(
-                "[OK] Edited entry [%u] in table [%s] in database [%s]\n",
-                THIS_TABLE->next_free_row,
-                THIS_TABLE->tbl_name,
-                dbs[db_index]->db_name
-              );
+    printf(
+            "[OK] Edited entry [%u] in table [%s] in database [%s]\n",
+            THIS_TABLE->next_free_row,
+            THIS_TABLE->tbl_name,
+            dbs[db_index]->db_name
+          );
 
 	++THIS_TABLE->next_free_row;
 	size_t free_row_i = THIS_TABLE->next_free_row;
 	
-	/* Calculate the next free row */
-	for(char* next_row_addr = struct_mem ; ; next_row_addr += THIS_TABLE->columns * ROW_ENTRY_SIZ){
-		if( 
-		    (*next_row_addr) 
-		    && 
-		    ( free_row_i < INITIAL_ROWS) 
-		  ) 
-		{ ++free_row_i; continue; }
+	/* Calculate the next free row.
+     * Two possible outcomes from this for-loop: 
+	 * Either all entries were full, so free_row_i == INITIAL_ROWS
+     * Or it found an entry beginning in \0, so free_row_i < INITIAL_ROWS 
+     */
+	for(char* next_row@ = struct_mem ; ; 
+	    next_row@ += THIS_TABLE->columns * ROW_ENTRY_SIZ)
+	{
+		if( (*next_row@) && (free_row_i < INITIAL_ROWS) ) {
+		    ++free_row_i; 
+		    continue; 
+		}
 		else { break; }	
 	}
-	/* Two possible outcomes from the for loop: Either all entries were full so free_row_i = INITIAL_ROWS */
-	/* 				            Or it found an entry that begins with a 0 byte, so free_row_i < INITIAL_ROWS */
 
 	if( free_row_i < INITIAL_ROWS ){ THIS_TABLE->next_free_row = free_row_i; }
 	else { THIS_TABLE->table_full = 1; }
@@ -141,13 +188,15 @@ static void Add_Row(size_t db_index, size_t tbl_index, char* contents_address){
 
 static void Print_Table(size_t db_index, size_t tbl_index){
 	print_red();
-	printf("\n\n******************** PRINTING TABLE [%s] in database [%s] *********************\n\n",
-		THIS_TABLE->tbl_name,
-		dbs[db_index]->db_name	
-			);
-	print_reset();
+	printf(
+	         "\n\n******************** PRINTING TABLE [%s] in database [%s]" 
+	         "*********************\n\n"
+		    ,THIS_TABLE->tbl_name
+		    ,dbs[db_index]->db_name	
+		  ); 
+    print_reset();
 	char* struct_mem = THIS_TABLE->table_ptr;
-	//Memory size of each row including delimiters " | ", newline and terminating null byte.
+	//Memory size of each row including |, \n and \0 at the ends of entries.
 	const size_t row_siz = (ROW_ENTRY_SIZ * THIS_TABLE->columns);
 	size_t entry_siz, spaces;
 	char* curr_entry;
@@ -171,36 +220,33 @@ static void Print_Table(size_t db_index, size_t tbl_index){
 		printf("|\n");
 	}
 	print_red();
-	printf("\n\n******************************** END OF TABLE *********************************\n\n");
+	printf("\n\n******************************** END OF TABLE"
+	       "*********************************\n\n");
 	print_reset();
 }	
 
 void Delete_Row(size_t db_index, size_t tbl_index, size_t row_index){
 	memset(
-		THIS_TABLE->table_ptr + (row_index * THIS_TABLE->columns * ROW_ENTRY_SIZ)
-		, 0x0
-		, THIS_TABLE->columns * ROW_ENTRY_SIZ
+		    THIS_TABLE->table_ptr
+		        + (row_index * THIS_TABLE->columns * ROW_ENTRY_SIZ)
+		    ,0x0
+		    ,THIS_TABLE->columns * ROW_ENTRY_SIZ
 	      );
 	if(THIS_TABLE->table_full) {
-	       	THIS_TABLE->next_free_row = row_index;  
+	    THIS_TABLE->next_free_row = row_index;  
 		THIS_TABLE->table_full = 0;
 	}
-	else if(row_index < THIS_TABLE->next_free_row){ THIS_TABLE->next_free_row = row_index; } 
-	printf("[OK] Erased row [%lu] of table [%s] in database [%s]\n", row_index, THIS_TABLE->tbl_name, dbs[db_index]->db_name);
+	else if(row_index < THIS_TABLE->next_free_row){ 
+	    THIS_TABLE->next_free_row = row_index; 
+	} 
+	printf(
+	        "[OK] Erased row [%lu] of table [%s] in database [%s]\n"
+	        ,row_index
+	        ,THIS_TABLE->tbl_name
+	        ,dbs[db_index]->db_name
+	      );
 }
 
-/*dbs[(uint8_t)( *((char*)&flags + 2 ) )]->tables[j]->tbl_name
-void Delete_Table(size_t db_index, size_t tbl_index){
-	for(size_t i = 0; i < INITIAL_ROWS; ++i){ Delete_Row(db_index, tbl_index, i); }	
-	free(THIS_TABLE->table_ptr);
-	free(THIS_TABLE);
-}
-
-void Delete_Database(size_t db_index){
-	for(size_t i = 0; i < 64; ++i){ Delete_Table(db_index, i); }
-	free(dbs[db_index]);
-}
-*/
 
 void Save_System(){
 	print_yellow(); printf("\n\n\n********************** INITIATING SYSTEM SAVING *******************************\n\n\n"); print_reset();
@@ -374,7 +420,7 @@ void Process_XSI_Command(char* cmd, char* out_buf){
 	memset(row_string, 0x0, 256);
 	memset(row_buffer, 0x0, 256);
 
-/* ***************** ADD DATABASE COMMAND BEGINS ***********************************************************************************************/
+/* ***************** ADD DATABASE COMMAND BEGINS ******************************/
 
 
         /* Command to add a database. 
@@ -383,10 +429,10 @@ void Process_XSI_Command(char* cmd, char* out_buf){
          */
         if(!strncmp(cmd, "add_db", 6) && (strlen(cmd) > 8)){ Create_Database(cmd + 7); return; }
 
-/* ***************** ADD DATABASE COMMAND ENDS ***********************************************************************************************/
+/* ***************** ADD DATABASE COMMAND ENDS ********************************/
 
 
-/* ***************** ADD TABLE COMMAND BEGINS ***********************************************************************************************/
+/* ***************** ADD TABLE COMMAND BEGINS ********************************/
         
 	else if(!strncmp(cmd, "add_tbl", 7)){
                 pos = 8;
@@ -530,7 +576,7 @@ void Process_XSI_Command(char* cmd, char* out_buf){
                                    ((flags & (((uint64_t)1) << 63)))
                                    &&
                                    (!(*(dbs[j]->db_name + (uint8_t)( *( (char*)&flags + 1 ) ) )))
-				   &&
+				                   &&
                                    ( *(cmd + pos + (uint8_t)(*( (char*)&flags + 1 ))) == '-' )
                                   )
                                 {
