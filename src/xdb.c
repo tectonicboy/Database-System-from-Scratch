@@ -26,7 +26,7 @@
  *        from the same scope the macro is invoked in.
  */
 #define CONSTRUCT_ROW_BUFFER(PTR, STR, COLS, AUX)     				    \
-	memset((void*)(PTR), 0x0, ROW_ENTRY_SIZ * (COLS)); 			        \  
+	memset((void*)(PTR), 0x0, ROW_ENTRY_SIZ * (COLS)); 			        \
     for(size_t p = 0; p < (COLS); ++p){	  				                \
 		while( (*(STR)) && (*(STR) != ' ') ){ 				            \
 			++(AUX);						                            \
